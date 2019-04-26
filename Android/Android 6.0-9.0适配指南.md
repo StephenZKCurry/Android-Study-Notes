@@ -6,7 +6,7 @@
 
 [TOC]
 
-##什么情况下需要考虑适配
+## 什么情况下需要考虑适配
 
 这就要看项目中配置的targetSdkVersion了，targetSdkVersion的意思是目标SDK版本，表示开发者已针对该版本进行了充分测试并做好了适配，因此我们需要根据targetSdkVersion来进行适配处理。简而言之，如果targetSdkVersion高于某一个SDK版本，就需要关注当前targetSdkVersion及其以下版本的行为变更，进行相应的适配处理。
 
@@ -156,7 +156,7 @@ public void onRequestPermissionsResult(int requestCode, @NonNull String[] permis
 
 推荐一个第三方权限申请库[XXPermissions](https://github.com/getActivity/XXPermissions)
 
-####悬浮窗权限
+#### 悬浮窗权限
 
 targetSdkVersion>=23时，使用悬浮窗功能需要添加权限**android.permission.SYSTEM_ALERT_WINDOW**，该权限比较特殊，不属于危险权限，因此不需要进行动态申请，要用户手动开启才能获得。获取该权限步骤如下：
 
@@ -211,7 +211,7 @@ protected void onActivityResult(int requestCode, int resultCode, @Nullable Inten
 
 ### Android 7.0
 
-####应用间共享文件
+#### 应用间共享文件
 
 从Android 7.0开始，不允许在App间使用`file://URI` 的方式传递一个File，否则会抛出FileUriExposedException的错误，直接引发Crash。官方提供的解决方案是使用**FileProvider**，通过`content://` 来替换`file://` 。FileProvider是ContentProvider的子类，用于应用间共享文件，当targetSdkVersion>=24时，就需要引入FileProvider来解决应用间共享文件问题。
 
@@ -389,7 +389,7 @@ startActivity(intent);
 
 在Android 8.0以上还需要考虑安装未知来源应用的权限，否则无法安装apk，因为不属于FileProvider的内容，这里就不提了，后面还会说到。
 
-####APK signature scheme v2签名方案
+#### APK signature scheme v2签名方案
 
 Android 7.0 引入一项新的应用签名方案APK Signature Scheme v2，它能提供更快的应用安装时间和更多针对未授权 APK 文件更改的保护。在默认情况下，Android Studio 2.2和Android Plugin for Gradle 2.2会使用APK Signature Scheme v2和传统签名方案来签署您的应用。
 
@@ -401,7 +401,7 @@ Android 7.0 引入一项新的应用签名方案APK Signature Scheme v2，它能
 
 ### Android 8.0
 
-####权限申请的变化
+#### 权限申请的变化
 
 * **Android 8.0中PHONE权限组新增了两个权限**
 
@@ -416,7 +416,7 @@ Android 7.0 引入一项新的应用签名方案APK Signature Scheme v2，它能
 
 举个例子，某个应用在其清单中添加了**READ_EXTERNAL_STORAGE**和**WRITE_EXTERNAL_STORAGE**两个权限，当应用申请了**READ_EXTERNAL_STORAGE**权限，并且用户允许了该权限后，如果该应用的targetSdkVersion低于26，那么系统还会同时授予**WRITE_EXTERNAL_STORAGE**权限，因为该权限也属于同一个权限组并且在清单中注册过；如果targetSdkVersion>=26，则系统此时仅会授予**READ_EXTERNAL_STORAGE**，不过，如果该应用后来又申请了**WRITE_EXTERNAL_STORAGE**权限，则系统会立即授予该权限，不会提示用户。
 
-####应用图标适配
+#### 应用图标适配
 
 Android 8.0提出了应用图标的适配规范，如果targetSdkVersion>=26，但是没有适配应用图标，有可能会出现下面这种效果。
 
@@ -495,7 +495,7 @@ if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
 此外，系统还提供了删除通知渠道的方法，调用NotificationManager的`deleteNotificationChannel(channelId)` 方法即可删除通知渠道，不过在通知设置界面会显示所有被删除的通知渠道数量，不是很美观，因此不推荐在程序中删除通知渠道。
 
-####未知来源应用安装
+#### 未知来源应用安装
 
 Android 8.0新增了未知来源安装的权限**android.permission.REQUEST_INSTALL_PACKAGES** ，如果targetSdkVersion>=26时，需要用户手动开启该权限才能安装apk。解决方案如下：
 
@@ -552,7 +552,7 @@ protected void onActivityResult(int requestCode, int resultCode, @Nullable Inten
 
 该权限的获取方式比较特殊，和Android 6.0中的悬浮窗权限类似，因为其不属于危险权限，因此并不是通过动态申请权限的方式来获得权限的。
 
-####静态注册广播无法接收
+#### 静态注册广播无法接收
 
 Android 8.0出于节省电量，提升续航等方面的考虑，大多数隐式广播通过静态注册的方式无法接收。只有以下隐式广播可以通过静态注册来接收：
 
@@ -708,7 +708,7 @@ sendBroadcast(intent);
 
 5）使用JobScheduler，这是一个官方提供的任务调度器，不过我还没有用过。
 
-####后台服务限制
+#### 后台服务限制
 
 Android 8.0出于降低耗电等方面的考虑，限制了后台服务的运行，当应用处于空闲状态时，后台服务运行会受到限制。但是对于前台服务（Foreground Service）则不会有这个限制，因为前台服务对用户是可见的。
 
@@ -794,7 +794,7 @@ private void createNotificationChannel(String channelId, String channelName, int
 
 创建通知用到了通知的适配，需要传入通知渠道参数。
 
-####Only fullscreen opaque activities can request orientation
+#### Only fullscreen opaque activities can request orientation
 
 Android 8.0限制非全屏的透明页面不允许设置方向，否则应用会Crash掉，该限制在Android 8.1及以上版本已经修复。解决方案有两种：
 
@@ -804,14 +804,14 @@ Android 8.0限制非全屏的透明页面不允许设置方向，否则应用会
 
 ### Android 9.0
 
-####使用前台服务需要添加权限
+#### 使用前台服务需要添加权限
 
 ```xml
 <!--Android 9.0上使用前台服务，需要添加权限-->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 ```
 
-####明文请求限制
+#### 明文请求限制
 
 Android 9.0限制了明文流量的网络请求（HTTP），非加密的流量请求都会被系统禁止掉。如果targetSdkVersion>=28，使用HTTP请求会在日志中提示以下异常（只是无法正常发出请求，不会导致应用崩溃）。
 
@@ -842,7 +842,7 @@ Android 9.0限制了明文流量的网络请求（HTTP），非加密的流量�
 
 3）将targetSdkVersion改为28以下，不推荐
 
-####刘海屏适配
+#### 刘海屏适配
 
 * **什么情况下需要适配刘海屏**
 
@@ -872,6 +872,9 @@ if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
 对于Android 9.0之前的刘海屏适配，需要根据各大厂商的适配方案进行适配。
 
 [华为刘海屏手机安卓O版本适配指导](https://developer.huawei.com/consumer/cn/devservice/doc/50114)
+
 [小米刘海屏水滴屏 Android O 适配](https://dev.mi.com/console/doc/detail?pId=1293)
+
 [Vivo全面屏应用适配指南](https://dev.vivo.com.cn/documentCenter/doc/103)
+
 [Oppo凹形屏适配指南](https://open.oppomobile.com/wiki/doc#id=10159)
