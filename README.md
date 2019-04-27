@@ -10,6 +10,7 @@
 ### Android
 
 * [Android 6.0-9.0适配指南](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%206.0-9.0%E9%80%82%E9%85%8D%E6%8C%87%E5%8D%97.md)
+* [Android刘海屏适配方案总结](https://www.jianshu.com/p/8ead0701d8ef)
 
 ### Java
 
@@ -19,7 +20,8 @@
 
 #### Flutter
 
-
+* [Json数据的解析](https://www.jianshu.com/p/830ecb047d3d)
+* [ListView的下拉刷新和上拉加载](https://www.jianshu.com/p/73a83e525743)
 
 ### 计算机基础
 
