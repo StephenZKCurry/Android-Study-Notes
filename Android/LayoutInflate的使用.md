@@ -1,4 +1,4 @@
-# LayoutInflate的用法
+# LayoutInflate的使用
 
 我们在开发中经常会用到**LayoutInflater**，用来加载布局，Activity中的setContentView()方法的内部其实也是使用LayoutInflater来加载布局的，下面就总结一下LayoutInflater的简单使用。
 
