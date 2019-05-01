@@ -1,10 +1,31 @@
 # Android 6.0-9.0适配指南
 
-> 前言
+> **前言**
 >
 > 随着Android版本的不断迭代，不同版本间的行为变更也越来越多，这就意味着开发者需要针对不同Android版本来进行适配。本文主要总结一下Android 6.0-9.0的行为变更，并列举出相应的适配方案。
 
-[TOC]
+## 目录
+
+- [什么情况下需要考虑适配](#什么情况下需要考虑适配)
+- [Android版本的行为变更](#android版本的行为变更)
+  * [Android 6.0](#android-6.0)
+    + [运行时权限](#运行时权限)
+    + [悬浮窗权限](#悬浮窗权限)
+  * [Android 7.0](#android-7.0)
+    + [应用间共享文件](#应用间共享文件)
+    + [APK signature scheme v2签名方案](#apk-signature-scheme-v2签名方案)
+  * [Android 8.0](#android-8.0)
+    + [权限申请的变化](#权限申请的变化)
+    + [应用图标适配](#应用图标适配)
+    + [通知适配](#通知适配)
+    + [未知来源应用安装](#未知来源应用安装)
+    + [静态注册广播无法接收](#静态注册广播无法接收)
+    + [后台服务限制](#后台服务限制)
+    + [Only fullscreen opaque activities can request orientation](#only-fullscreen-opaque-activities-can-request-orientation)
+  * [Android 9.0](#android-9.0)
+    + [使用前台服务需要添加权限](#使用前台服务需要添加权限)
+    + [明文请求限制](#明文请求限制)
+    + [刘海屏适配](#刘海屏适配)
 
 ## 什么情况下需要考虑适配
 

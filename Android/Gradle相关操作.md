@@ -1,6 +1,14 @@
 # Android Studio中的Gradle相关操作
 
-[TOC]
+> **前言**
+>
+> Gradle是Android Studio采用的构建工具，给我们的开发提供了诸多便利，但是在使用Gradle的过程中，也有一些需要注意的地方，本文主要记录一下使用Gradle的一些常见问题和技巧。
+
+## 目录
+
+- [1.Gradle插件版本和Gradle版本对应关系](#1.gradle插件版本和gradle版本对应关系)
+- [2.Gradle下载](#2.gradle下载)
+- [3.依赖统一管理](#3.依赖统一管理)
 
 ## 1.Gradle插件版本和Gradle版本对应关系
 
@@ -24,7 +32,9 @@
 
 ## 2.Gradle下载
 
-[下载地址](http://services.gradle.org/distributions/)
+我们在新建或打开一个项目时需要注意项目的Gradle版本，配置在项目根目录\gradle\wrapper下的**gradle-wrapper.properties**文件中，如果我们本地没有该版本的Gradle，就会从网络下载，由于网络的原因，有时下载得会很慢。我们可以提前将相应版本的Gradle下载到本地，这样就省去了项目在build过程中下载Gradle的时间。
+
+[Gradle下载地址](http://services.gradle.org/distributions/)
 
 ## 3.依赖统一管理
 
