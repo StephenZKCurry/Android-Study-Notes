@@ -6,9 +6,9 @@
 
 ## 目录
 
-- [1.Gradle插件版本和Gradle版本对应关系](#1.gradle插件版本和gradle版本对应关系)
-- [2.Gradle下载](#2.gradle下载)
-- [3.依赖统一管理](#3.依赖统一管理)
+- [1.Gradle插件版本和Gradle版本对应关系](#1gradle插件版本和gradle版本对应关系)
+- [2.Gradle下载](#2gradle下载)
+- [3.依赖统一管理](#3依赖统一管理)
 
 ## 1.Gradle插件版本和Gradle版本对应关系
 
