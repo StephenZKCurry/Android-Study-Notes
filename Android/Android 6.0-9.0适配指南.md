@@ -817,7 +817,7 @@ private void createNotificationChannel(String channelId, String channelName, int
 
 #### Only fullscreen opaque activities can request orientation
 
-Android 8.0限制非全屏的透明页面不允许设置方向，否则应用会Crash掉，该限制在Android 8.1及以上版本已经修复。解决方案有两种：
+Android 8.0限制全屏的透明页面不允许设置方向，否则应用会Crash掉，该限制在Android 8.1及以上版本已经修复。解决方案有两种：
 
 1）取消设置页面透明，将页面的**android:windowIsTranslucent**属性设置为false
 
