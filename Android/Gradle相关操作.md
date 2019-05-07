@@ -8,7 +8,8 @@
 
 - [1.Gradle插件版本和Gradle版本对应关系](#1gradle插件版本和gradle版本对应关系)
 - [2.Gradle下载](#2gradle下载)
-- [3.依赖统一管理](#3依赖统一管理)
+- [3.解决support包冲突](#3解决support包冲突)
+- [4.依赖统一管理](#4依赖统一管理)
 
 ## 1.Gradle插件版本和Gradle版本对应关系
 
@@ -36,7 +37,51 @@
 
 [Gradle下载地址](http://services.gradle.org/distributions/)
 
-## 3.依赖统一管理
+## 3.解决support包冲突
+
+我们的项目引入第三方库有时会遇到support包冲突的问题，原因就是第三库也引入了support包，但是和我们自己项目中的support包版本不一致。
+
+首先我们要知道是哪个第三方库导致的冲突，在Android Studio的**Terminal**中运行`gradle -q app:dependencies`命令，会打印出项目中所有的依赖库，包括第三方库自身的依赖。
+
+![](https://ws3.sinaimg.cn/large/005BYqpggy1g2sqqbv321j30qj0dv3z6.jpg)
+
+这里我们可以看出我引入的**PhotoVIew**这个第三方库依赖的support包版本为23.0.0，但是我的项目依赖的support包版本为28.0.0，因此冲突就是这个库导致的。
+
+解决support包版本冲突的方法主要有以下三种：
+
+1）修改自己项目的support包版本，不推荐这样做
+
+2）依赖第三方库时排除对support包的依赖
+
+```groovy
+implementation('com.github.chrisbanes:PhotoView:1.2.6') {
+    exclude module: 'support-v4'
+    exclude group: 'com.android.support'
+}
+```
+
+当有多个第三方库都引入了support包，需要每个依赖都去排除，这种方法就不太适合了。
+
+3）指定统一的support包版本
+
+在app下的**build.gradle**文件中添加以下代码：
+
+```groovy
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        def requested = details.requested
+        if (requested.group == 'com.android.support') {
+            if (!requested.name.startsWith("multidex")) {
+                details.useVersion '28.0.0'
+            }
+        }
+    }
+}
+```
+
+4）将项目迁移到AndroidX，虽然这是官方的解决方案，但是目前还有一些坑，需要谨慎操作。
+
+## 4.依赖统一管理
 
 在开发过程中，特别是涉及到模块化开发的时候，为了保证全部模块都使用同一个依赖库的管理，一般有两种方法：
 
@@ -85,4 +130,3 @@ dependencies {
 2）直接在Project的**build.gradle**文件下添加ext{}结点，配置依赖
 
 其实就是相当于将**config.gradle**文件中的内容移到了**build.gradle**中，使用方法同上。
-
