@@ -234,6 +234,21 @@ request: function() {
 
 由于箭头函数中的this指向声明函数时父一级的this，因此就可以调用this.setData()方法了。
 
+3）使用bind
+
+```javascript
+getData: function() {
+  wx.request({
+    url: 'url',
+    success: function(res) {
+      this.setData({
+        name: res.name
+      });
+    }.bind(this)
+  });
+}
+```
+
 * React Native绑定事件
 
 
