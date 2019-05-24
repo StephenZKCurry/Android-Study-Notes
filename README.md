@@ -15,6 +15,7 @@
 * [Android 6.0-9.0适配指南](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%206.0-9.0%E9%80%82%E9%85%8D%E6%8C%87%E5%8D%97.md)
 * [Android刘海屏适配方案总结](https://www.jianshu.com/p/8ead0701d8ef)
 * [Gradle相关操作](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Gradle%E7%9B%B8%E5%85%B3%E6%93%8D%E4%BD%9C.md)
+* [Android架构组件-Lifecycle](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6-Lifecycle.md)
 
 ### Java
 
