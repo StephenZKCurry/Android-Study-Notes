@@ -27,10 +27,11 @@
 
 * [Json数据的解析](https://www.jianshu.com/p/830ecb047d3d)
 * [ListView的下拉刷新和上拉加载](https://www.jianshu.com/p/73a83e525743)
+* [JavaScript相关问题](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/%E7%A7%BB%E5%8A%A8%E8%B7%A8%E5%B9%B3%E5%8F%B0/JavaScript%E7%9B%B8%E5%85%B3%E9%97%AE%E9%A2%98.md)
 
 ### 计算机基础
 
-
+* [HTTP请求中的参数提交](https://www.jianshu.com/p/065fc0555056)
 
 ### 数据结构和算法
 

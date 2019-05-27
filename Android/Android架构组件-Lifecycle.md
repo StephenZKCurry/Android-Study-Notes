@@ -1,5 +1,13 @@
 # Android架构组件-Lifecycle
 
+## 目录
+
+- [1.简介](#1简介)
+- [2.简单使用](#2简单使用)
+- [3.原理分析](#3原理分析)
+- [4.应用场景](#4应用场景)
+- [5.参考文章](#5参考文章)
+
 ## 1.简介
 
 [Lifecycle](https://developer.android.google.cn/topic/libraries/architecture/lifecycle)是Android官方推出的Android Jetpack中Architecture组件的一员，顾名思义，可以用来管理Activity和Fragment的生命周期，实现对生命周期的监听，为开发者提供了一种更优雅的方式来解决生命周期导致的内存泄漏问题。
@@ -58,7 +66,7 @@ public class MyLifecycleObserver implements LifecycleObserver {
 }
 ```
 
-这里在MyLifecycleObserver中通过注解定义了生命周期的监听方法，从名字上我们大体可以知道对应的生命周期，这里先不关注，后面再详细介绍。
+这里在MyLifecycleObserver中通过注解定义了生命周期的监听方法，从名字上我们大体可以知道对应的生命周期，后面会再详细介绍。
 
 * 在Activity中注册LifecycleObserver
 
@@ -467,4 +475,75 @@ public class MyActivity extends Activity implements LifecycleOwner {
 }
 ```
 
-其次，官方提供了一个**DefaultLifecycleObserver**类，该类是在androidx库中的，方便我们直接实现LifecycleObserver接口，不需要通过注解来定义生命周期回调，官方更推荐我们使用该类。因为一旦Java 8成为Android的主流，注释将被弃用。
+Lifecycle由于可以实现生命周期的感知和管理，因此我们可以将其用于一些与生命周期相关的操作中，例如MVP架构中Presenter的attach与detach、Handler的消息移除等等，有效地解决内存泄漏问题。就拿Handler举例，我们知道Handler的内存泄漏问题本质上是未处理完成的消息导致的，需要在Activity销毁时手动移除所有消息，我们的一般做法如下：
+
+```java
+public class MainActivity extends AppCompatActivity {
+
+    private Handler mHandler;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        liveData.setValue("onDestroy");
+        mHandler.removeCallbacksAndMessages(null);
+    }
+}
+```
+
+这样做的缺点是在每一个使用了Handler的Activity中都需要添加同样的代码，而Lifecycler正好可以帮我们解决这个问题，自定义一个Handler，实现LifecycleObserver接口，这样Handler就可以感知到Activity的生命周期，自动完成消息的移除。下面的代码是程序亦非猿大佬封装的LifecycleHandler，直接拿来就可以使用。
+
+```java
+public class LifecycleHandler extends Handler implements LifecycleObserver {
+
+    private LifecycleOwner lifecycleOwner;
+
+    public LifecycleHandler(final LifecycleOwner lifecycleOwner) {
+        this.lifecycleOwner = lifecycleOwner;
+        addObserver();
+    }
+
+    public LifecycleHandler(final Callback callback, final LifecycleOwner lifecycleOwner) {
+        super(callback);
+        this.lifecycleOwner = lifecycleOwner;
+        addObserver();
+    }
+
+    public LifecycleHandler(final Looper looper, final LifecycleOwner lifecycleOwner) {
+        super(looper);
+        this.lifecycleOwner = lifecycleOwner;
+        addObserver();
+    }
+
+    public LifecycleHandler(final Looper looper, final Callback callback, final LifecycleOwner lifecycleOwner) {
+        super(looper, callback);
+        this.lifecycleOwner = lifecycleOwner;
+        addObserver();
+    }
+
+    private void addObserver() {
+        if (lifecycleOwner == null) {
+            throw new NullPointerException("LifecycleOwner can not be null");
+        }
+        lifecycleOwner.getLifecycle().addObserver(this);
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    private void onDestroy() {
+        removeCallbacksAndMessages(null);
+        lifecycleOwner.getLifecycle().removeObserver(this);
+    }
+}
+```
+
+## 5.参考文章
+
+[【AAC 系列二】深入理解架构组件的基石：Lifecycle](https://mp.weixin.qq.com/s/8vuOj8JnGk-hwl5AU2itkQ)
+
+[Lifecycle官方文档](https://developer.android.google.cn/topic/libraries/architecture/lifecycle)
