@@ -1,5 +1,13 @@
 # Android架构组件-LiveData
 
+## 目录
+
+- [1.简介](#1简介)
+- [2.简单使用](#2简单使用)
+- [3.原理分析](#3原理分析)
+- [4.应用场景](#4应用场景)
+- [5.参考文章](#5参考文章)
+
 ## 1.简介
 
 [LiveData](https://developer.android.google.cn/topic/libraries/architecture/livedata)是Android官方推出的Android Jetpack中Architecture组件的一员，是可观察的数据持有类， 与常规Observable不同，LiveData是生命周期感知的，这确保了LiveDate仅在LifecycleOwner处于Active（STARTED/RESUMED）状态下才通知更新数据并且在DESTROYED状态下移除Observer，避免了内存泄漏。
