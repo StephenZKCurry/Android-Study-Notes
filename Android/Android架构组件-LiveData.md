@@ -14,6 +14,12 @@
 
 ## 2.简单使用
 
+添加依赖
+
+```groovy
+implementation "android.arch.lifecycle:extensions:1.1.1"
+```
+
 LiveData通常是配合ViewModel使用的，这里为了简单，单独使用LiveData。
 
 ```java
