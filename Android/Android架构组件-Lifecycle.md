@@ -301,7 +301,7 @@ public class ReportFragment extends Fragment {
 
 分析到这里我们大概对Lifecycle有了一个初步的认知，即通过**给Activity注入一个Fragment，继而通过该Fragment来进行生命周期事件的分发**。其实通过添加Fragment来简化Activity中的回调是一个很常见的方法，很多优秀的第三方框架都有用到，像RxPermission等，给我们提供了一个很好的思路。
 
-接下来我们继续分析，上线分析到了ReportFragment的`dispatch()`方法，内部通过`getLifecycle().handleLifecycleEvent(event)`获取到SupportActivity中定义的LifecycleRegistry对象，来进行生命周期事件的处理，既然如此，我们就来看LifecycleRegistry的`handleLifecycleEvent(Lifecycle.Event event)`方法。
+接下来我们继续分析，上面分析到了ReportFragment的`dispatch()`方法，内部通过`getLifecycle().handleLifecycleEvent(event)`获取到SupportActivity中定义的LifecycleRegistry对象，来进行生命周期事件的处理，既然如此，我们就来看LifecycleRegistry的`handleLifecycleEvent(Lifecycle.Event event)`方法。
 
 ```java
 /**
