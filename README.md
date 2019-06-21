@@ -17,6 +17,7 @@
 * [Gradle相关操作](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Gradle%E7%9B%B8%E5%85%B3%E6%93%8D%E4%BD%9C.md)
 * [Android架构组件-Lifecycle](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6-Lifecycle.md)
 * [Android架构组件-LiveData](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6-LiveData.md)
+* [Android架构组件-ViewModel](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%E6%9E%B6%E6%9E%84%E7%BB%84%E4%BB%B6-ViewModel.md)
 
 ### Java
 
@@ -29,6 +30,10 @@
 
 * [Json数据的解析](https://www.jianshu.com/p/830ecb047d3d)
 * [ListView的下拉刷新和上拉加载](https://www.jianshu.com/p/73a83e525743)
+* [Android原生项目引入Flutter](https://www.jianshu.com/p/7b6522e3e8f1)
+
+#### 其他
+
 * [JavaScript相关问题](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/%E7%A7%BB%E5%8A%A8%E8%B7%A8%E5%B9%B3%E5%8F%B0/JavaScript%E7%9B%B8%E5%85%B3%E9%97%AE%E9%A2%98.md)
 
 ### 计算机基础
