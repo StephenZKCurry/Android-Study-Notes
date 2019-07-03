@@ -25,6 +25,7 @@
   * [Android 9.0](#android-90)
     + [使用前台服务需要添加权限](#使用前台服务需要添加权限)
     + [明文请求限制](#明文请求限制)
+    + [Apache HTTP客户端弃用](#Apache HTTP客户端弃用)
     + [刘海屏适配](#刘海屏适配)
 
 ## 什么情况下需要考虑适配
@@ -862,6 +863,20 @@ Android 9.0限制了明文流量的网络请求（HTTP），非加密的流量�
 ```
 
 3）将targetSdkVersion改为28以下，不推荐
+
+#### Apache HTTP客户端弃用
+
+在Android 6.0中，官方取消了对Apache HTTP客户端的支持。从Android P开始，默认情况下该内容库已从 bootclasspath中移除且不可用于应用。这样导致的问题是如果我们的项目中用到了Apache HTTP Client的相关类（包括第三方库间接引用），编译时会抛出**ClassNotFoundException**错误。
+
+**解决方案**
+
+在AndroidManifest.xml中配置：
+
+```xml
+<uses-library
+      android:name="org.apache.http.legacy"
+      android:required="false" />
+```
 
 #### 刘海屏适配
 
