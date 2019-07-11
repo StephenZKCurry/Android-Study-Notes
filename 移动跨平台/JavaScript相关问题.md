@@ -195,7 +195,7 @@ getData: function() {
 }
 ```
 
-但是这样会报错**TypeError: Cannot read property 'setData' of undefined**，原因就是在success回调函数中的this不是指向当前page对象，因此是找不到setData方法的。
+但是这样会报错**TypeError: Cannot read property 'setData' of undefined**，原因就是在success回调函数中的this不是指向当前Page对象，因此是找不到`setData`方法的。
 
 解决方案：
 
@@ -220,7 +220,7 @@ getData: function() {
 2）使用箭头函数
 
 ```javascript
-request: function() {
+getData: function() {
   wx.request({
     url: 'url',
     success: (res) => {
@@ -260,3 +260,51 @@ getData: function() {
 
 ## 3.原型链
 
+
+
+## 4.参数传递问题
+
+首先确定一下概念：
+
+**值传递**（pass by value）是指在调用函数时将实际参数复制一份传递到函数中，这样在函数中如果对参数进行修改，将不会影响到实际参数。
+
+**引用传递**（pass by reference）是指在调用函数时将实际参数的地址直接传递到函数中，那么在函数中对参数所进行的修改，将影响到实际参数。
+
+JavaScript中的数据类型可以分为以下两大类：
+
+基本数据类型：Undefined、Null、Boolean、Number、String
+
+引用类型：Object、Array、Date、RegExp、Function、......
+
+首先来看基本数据类型的传递，以String 为例：
+
+```java
+var str = 'a';
+var str1 = str;
+str1 = 'b';
+console.log(str); // 打印'a'
+```
+
+将str赋值给str1，从运行结果可以看出改变str1的值并不会改变str的值。
+
+然后来看引用类型，以Object和Array为例：
+
+```javascript
+// Object
+var obj = {
+  'name': 'a'
+};
+var obj1 = obj;
+obj1.name = 'b';
+console.log(obj); // 打印{name:"b"}
+
+// Array
+var list = [1, 2, 3];
+var list1 = list;
+list1[0] = 4;
+console.log(list); // 打印[4,2,3]
+```
+
+这种情况下可以看到原变量的值被修改了。
+
+从以上两种情况下我们可能会得出结论：基本数据类型是值传递；引用类型是引用传递，这个结论是不正确的，虽然表面上看确实是这样，但其实**JavaScript只有值传递**，因为对于引用类型，在赋值时也是会复制出一个新变量，只不过这个新的变量和原变量指向的同一块内存地址，因此改变新变量的值也会影响到原变量，可以这样理解，对于引用类型，传递的值就是它的地址。

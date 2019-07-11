@@ -407,7 +407,146 @@ public void schedule() throws RemoteException {
 }
 ```
 
-mClient的类型是IApplicationThread，
+mClient的类型是IApplicationThread，最开始也提到过，ApplicationThread实现了IApplicationThread接口，再回过头看上面的逐级调用，不难发现这里的mClient就是最开始传入的ApplicationThread对象，因此我们直接来看ApplicationThread的`scheduleTransaction()`方法：
+
+**ApplicationThread的scheduleTransaction方法**
+
+```java
+@Override
+public void scheduleTransaction(ClientTransaction transaction) throws RemoteException {
+    ActivityThread.this.scheduleTransaction(transaction);
+}
+```
+
+这里又调用了ActivityThread的`scheduleTransaction()`方法，ActivityThread中没有定义这个方法，它定义在ActivityThread的父类**ClientTransactionHandler**中。
+
+**ClientTransactionHandler的scheduleTransaction方法**
+
+```java
+void scheduleTransaction(ClientTransaction transaction) {
+    transaction.preExecute(this);
+    sendMessage(ActivityThread.H.EXECUTE_TRANSACTION, transaction);
+}
+```
+
+方法内部调用了`sendMessage()`方法，该方法是一个抽象方法，它的实现在ActivityThread中。
+
+**ActivityThread的sendMessage方法**
+
+```java
+void sendMessage(int what, Object obj) {
+    sendMessage(what, obj, 0, 0, false);
+}
+
+private void sendMessage(int what, Object obj, int arg1) {
+    sendMessage(what, obj, arg1, 0, false);
+}
+
+private void sendMessage(int what, Object obj, int arg1, int arg2) {
+    sendMessage(what, obj, arg1, arg2, false);
+}
+
+private void sendMessage(int what, Object obj, int arg1, int arg2, boolean async) {
+    if (DEBUG_MESSAGES) Slog.v(
+            TAG, "SCHEDULE " + what + " " + mH.codeToString(what)
+                    + ": " + arg1 + " / " + obj);
+    Message msg = Message.obtain();
+    msg.what = what;
+    msg.obj = obj;
+    msg.arg1 = arg1;
+    msg.arg2 = arg2;
+    if (async) {
+        msg.setAsynchronous(true);
+    }
+    mH.sendMessage(msg);
+}
+```
+
+mH的类型是**H**，这个H就是ActivityThread内部定义的一个**Handler**类，`sendMessage()`方法所做的就是创建并向Handler发送一个消息，这个消息的what值为**EXECUTE_TRANSACTION**。下面我们就来看H的`handleMessage()`方法，找到对**EXECUTE_TRANSACTION**这个消息的处理。
+
+```java
+public void handleMessage(Message msg) {
+    // 此处省略部分代码
+    switch (msg.what) {
+        // 此处省略部分代码
+        case EXECUTE_TRANSACTION:
+            final ClientTransaction transaction = (ClientTransaction) msg.obj;
+        	// 核心代码
+            mTransactionExecutor.execute(transaction);
+            if (isSystem()) {
+                // Client transactions inside system process are recycled on the client side
+                // instead of ClientLifecycleManager to avoid being cleared before this
+                // message is handled.
+                transaction.recycle();
+            }
+            // TODO(lifecycler): Recycle locally scheduled transactions.
+            break;
+        // 此处省略部分代码
+    }
+    // 此处省略部分代码
+}
+```
+
+这里的核心代码是`mTransactionExecutor.execute(transaction)`，mTransactionExecutor的类型是**TransactionExecutor**，我们来看TransactionExecutor的`execute()`方法：
+
+```java
+public void execute(ClientTransaction transaction) {
+    final IBinder token = transaction.getActivityToken();
+    log("Start resolving transaction for client: " + mTransactionHandler + ", token: " + token);
+
+    executeCallbacks(transaction);
+
+    executeLifecycleState(transaction);
+    mPendingActions.clear();
+    log("End resolving transaction");
+}
+
+public void executeCallbacks(ClientTransaction transaction) {
+    // 这里的callbacks是上面调用ActivityStackSupervisor中realStartActivityLocked方法时赋值的
+    // ClientTransactionItem的实际类型为LaunchActivityItem
+    final List<ClientTransactionItem> callbacks = transaction.getCallbacks();
+
+    // 此处省略部分代码
+    for (int i = 0; i < size; ++i) {
+        final ClientTransactionItem item = callbacks.get(i);
+        final int postExecutionState = item.getPostExecutionState();
+        final int closestPreExecutionState = mHelper.getClosestPreExecutionState(r,
+                item.getPostExecutionState());
+        // 此处省略部分代码
+        // 核心代码
+        item.execute(mTransactionHandler, token, mPendingActions);
+        item.postExecute(mTransactionHandler, token, mPendingActions);
+        // 此处省略部分代码
+    }
+}
+```
 
 
+
+**LaunchActivityItem的execute方法**
+
+```java
+public void execute(ClientTransactionHandler client, IBinder token,
+                    PendingTransactionActions pendingActions) {
+    // 此处省略部分代码
+    // 核心代码
+    client.handleLaunchActivity(r, pendingActions, null /* customIntent */);
+    // 此处省略部分代码
+}
+```
+
+
+
+**ActivityThread的handleLaunchActivity方法**
+
+```java
+public Activity handleLaunchActivity(ActivityClientRecord r,
+                                     PendingTransactionActions pendingActions, Intent customIntent) {
+    // 省略部分代码
+    // 核心代码
+    final Activity a = performLaunchActivity(r, customIntent);
+    // 省略部分代码
+    return a;
+}
+```
 
