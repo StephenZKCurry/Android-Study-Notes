@@ -860,7 +860,7 @@ public void execute(ClientTransactionHandler client, IBinder token,
 
 到这里整个Activity的启动流程就分析得差不多了，实际的流程要比分析的复杂得多，也会涉及到很多其他的知识点，包括View的绘制和进程的创建等等，由于水平有限很多地方只能浅尝辄止，太过深入源码容易迷失方向。上一张流程图总结一下吧：
 
-![Activity启动流程](https://upload-images.jianshu.io/upload_images/12169089-2826e446fa6b6761.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+![Activity启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 从分析和图中我们也能发现在Activity的启动流程中有几个类起到了至关重要的作用：
 

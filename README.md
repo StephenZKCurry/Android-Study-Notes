@@ -9,6 +9,9 @@
 
 ### Android
 
+* [Activity启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)
+
+
 * [LayoutInflate的使用](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/LayoutInflate%E7%9A%84%E4%BD%BF%E7%94%A8.md)
 
 
@@ -31,6 +34,10 @@
 * [Json数据的解析](https://www.jianshu.com/p/830ecb047d3d)
 * [ListView的下拉刷新和上拉加载](https://www.jianshu.com/p/73a83e525743)
 * [Android原生项目引入Flutter](https://www.jianshu.com/p/7b6522e3e8f1)
+
+#### 微信小程序
+
+* [微信小程序开发问题总结](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/%E7%A7%BB%E5%8A%A8%E8%B7%A8%E5%B9%B3%E5%8F%B0/%E5%BE%AE%E4%BF%A1%E5%B0%8F%E7%A8%8B%E5%BA%8F%E5%BC%80%E5%8F%91%E9%97%AE%E9%A2%98.md)
 
 #### 其他
 
