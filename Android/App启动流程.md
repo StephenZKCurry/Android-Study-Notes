@@ -583,7 +583,7 @@ final boolean realStartActivityLocked(ActivityRecord r, ProcessRecord app,
 
 分析到这里，App的简单启动流程我们就清楚了，基本上和Activity的启动流程类似，不同之处是需要创建应用进程，一个简单的流程图如下所示：
 
-
+![App启动流程](https://raw.githubusercontent.com/StephenZKCurry/Android-Study-Notes/master/Android/App%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg)
 
 ## 总结
 

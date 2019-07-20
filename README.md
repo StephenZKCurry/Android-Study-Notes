@@ -10,6 +10,7 @@
 ### Android
 
 * [Activity启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)
+* [App启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/App%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)
 
 
 * [LayoutInflate的使用](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/LayoutInflate%E7%9A%84%E4%BD%BF%E7%94%A8.md)
@@ -54,8 +55,8 @@
 
 #### 设计模式
 
-* [单例模式](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F-%E5%8D%95%E4%BE%8B%E6%A8%A1%E5%BC%8F.md)
-* [工厂模式](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F-%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.md)
+* [单例模式](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/%E5%85%B6%E4%BB%96/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F-%E5%8D%95%E4%BE%8B%E6%A8%A1%E5%BC%8F.md)
+* [工厂模式](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/%E5%85%B6%E4%BB%96/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F-%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.md)
 
 ## 关于作者
 
