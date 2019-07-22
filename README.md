@@ -1,4 +1,6 @@
 # Android-Study-Notes
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/logo.png?raw=true)
+
 我的Android学习笔记
 
 ## 前言

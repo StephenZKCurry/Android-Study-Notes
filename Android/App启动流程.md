@@ -137,7 +137,7 @@ public boolean startActivitySafely(View v, Intent intent, ItemInfo item) {
 
 到这里就又回到了Activity的`startActivity()`方法，也就是Activity的启动流程，这一部分我就不从头开始分析了了，可以查看上一篇文章[Activity启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)，这里附上Activity启动的流程图。
 
-![Activity启动流程](https://raw.githubusercontent.com/StephenZKCurry/Android-Study-Notes/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg)
+![Activity启动流程](https://raw.githubusercontent.com/StephenZKCurry/Android-Study-Notes/master/images/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg)
 
 我们跳过一部分流程，直接来看**ActivityStackSupervisor**的`startSpecificActivityLocked()`方法：
 
@@ -583,7 +583,7 @@ final boolean realStartActivityLocked(ActivityRecord r, ProcessRecord app,
 
 分析到这里，App的简单启动流程我们就清楚了，基本上和Activity的启动流程类似，不同之处是需要创建应用进程，一个简单的流程图如下所示：
 
-![App启动流程](https://raw.githubusercontent.com/StephenZKCurry/Android-Study-Notes/master/Android/App%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg)
+![App启动流程](https://raw.githubusercontent.com/StephenZKCurry/Android-Study-Notes/master/images/App%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.jpg)
 
 ## 总结
 
