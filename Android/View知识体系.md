@@ -2,11 +2,266 @@
 
 [TOC]
 
-**本文的分析基于Android 9.0（API Level 28）的源码**
+> **前言**
+>
+> View可以说是我们在Android开发中接触得最多的一个类了，虽然不属于四大组件，但是起到的作用却一点都不亚于四大组件，页面中的各种控件、布局都直接或间接地继承自View，可以说View无处不在。因而了解View的工作原理能让我们更好地处理开发中的诸多问题，尤其是对于老生常谈的自定义View来说，View的工作原理更是必须要掌握的。
 
-## 1.View的绘制流程
+在进入正文之前还是要强调一下，**本文的分析基于Android 9.0（API Level 28）的源码**，不同版本的源码可能会有不同，但是基本思路不会变化太多，可以进行参考。
 
-## 1.1.
+## 1.View的工作原理
+
+### 1.1.几个相关类
+
+在介绍View的工作原理之前首先要介绍几个相关的类，它们在View的工作流程中扮演了重要的角色，了解它们能让我们对于View的工作原理有一个更全面的认识。
+
+#### 1.1.1.Window和WindowManager
+
+**Window**顾名思义是表示一个窗口，虽然我们在开发中可能很少直接去操作Window，我目前接触过的也仅仅是给Window添加一些Flag的操作，但是Window在Android的视图体系中其实是很重要的一环，它可以说是所有视图的**承载器**，我们最熟悉的Activity的视图实际上也是附加在Window上，通过Window来管理的。Window是一个抽象类，它只有一个实现类**PhoneWindow**，因此我们在分析源码时直接看PhoneWindow就可以了。
+
+**WindowManager**可以译为窗口管理者，是外界访问Window的入口，我们可以通过WindowManager来操作Window。WindowManager是一个接口，它的实现类是**WindowManagerImpl**。
+
+#### 1.1.2.DecorView
+
+**DecorView**是最顶层的View，是整个视图的根节点，继承自FrameLayout，因此它也是一个ViewGroup。下面以一张图来展示可能更直观一些。
+
+
+
+DecorView下包含一个竖直方向的LinearLayout，它的内部根据页面主题的不同可能会有所不同，但是一定会包含一个子View，它的id为**android.R.id.content**，是一个FrameLayout，我们调用`setContentView()`设置的布局就是添加到了这个contentView中。
+
+#### 1.1.3.ViewRoot
+
+ViewRoot对应于**ViewRootImpl**，是连接WindowManager和DecorView的纽带，View的measure、layout和draw流程都是通过ViewRootImpl完成的。
+
+### 1.2.准备阶段
+
+这里将以下几个流程称作View工作流程的准备阶段，可能不是很确切，主要还是为了和我们熟知的measure、layout、draw三大流程区分开，这一阶段完成的工作是Window和DecorView的创建以及对三大流程的调用。
+
+#### 1.2.1.Window的创建
+
+Window的创建时机是在**ActivityThread**的`performLaunchActivity()`方法中，在之前Activity的启动流程中也分析过该方法，我们再来简单回顾一下：
+
+**ActivityThread的performLaunchActivity方法**
+
+```java
+private Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent) {
+    // ...
+  
+    java.lang.ClassLoader cl = appContext.getClassLoader();
+    // 1.创建Activity对象
+    activity = mInstrumentation.newActivity(
+            cl, component.getClassName(), r.intent);
+    // ...
+  
+    // 2.创建Application对象，如果已经创建则不会重复创建
+    Application app = r.packageInfo.makeApplication(false, mInstrumentation);
+    // ...
+  
+    if (activity != null) {
+        // ...
+        Window window = null;
+        if (r.mPendingRemoveWindow != null && r.mPreserveWindow) {
+            window = r.mPendingRemoveWindow;
+            r.mPendingRemoveWindow = null;
+            r.mPendingRemoveWindowManager = null;
+        }
+        appContext.setOuterContext(activity);
+      	// 3.创建PhoneWindow
+        activity.attach(appContext, this, getInstrumentation(), r.token,
+                r.ident, app, r.intent, r.activityInfo, title, r.parent,
+                r.embeddedID, r.lastNonConfigurationInstances, config,
+                r.referrer, r.voiceInteractor, window, r.configCallback);
+
+        // ...
+      	// 4.调用onCreate()方法
+        if (r.isPersistable()) {
+            mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState);
+        } else {
+            mInstrumentation.callActivityOnCreate(activity, r.state);
+        }
+        // ...
+        r.activity = activity;
+    }
+    // ...
+    return activity;
+}
+```
+
+该方法内部会依次创建Activity对象和Application对象，最后通过Instrumentation对象调用Activity的`onCreate()`方法，这些都不是我们这里要关注的，我们只需要分析Activity的`attach()`方法。
+
+**Activity的attach方法**
+
+```java
+final void attach(Context context, ActivityThread aThread,
+                  Instrumentation instr, IBinder token, int ident,
+                  Application application, Intent intent, ActivityInfo info,
+                  CharSequence title, Activity parent, String id,
+                  NonConfigurationInstances lastNonConfigurationInstances,
+                  Configuration config, String referrer, IVoiceInteractor voiceInteractor,
+                  Window window, ActivityConfigCallback activityConfigCallback) {
+    // ...
+
+    // 创建PhoneWindow
+    mWindow = new PhoneWindow(this, window, activityConfigCallback);
+  	// 设置回调
+  	mWindow.setWindowControllerCallback(this);
+    mWindow.setCallback(this);
+    mWindow.setOnWindowDismissedCallback(this);
+
+    // ...
+	
+  	// 设置WindowManager
+    mWindow.setWindowManager(
+            (WindowManager)context.getSystemService(Context.WINDOW_SERVICE),
+            mToken, mComponent.flattenToString(),
+            (info.flags & ActivityInfo.FLAG_HARDWARE_ACCELERATED) != 0);
+    if (mParent != null) {
+        mWindow.setContainer(mParent.getWindow());
+    }
+    mWindowManager = mWindow.getWindowManager();
+    // ...
+}
+```
+
+可以发现PhoneWindow对象就是在`attach()`方法中创建的，之后会为PhoneWindow设置相关回调并创建WindowManager对象（实际上是WindowManagerImpl对象）。
+
+#### 1.2.2.DecorView的创建
+
+在Activity的`onCreate()`方法中我们会调用`setContentView()`来设置页面的布局，DecorView的创建就要从该方法来分析。
+
+**Activity的setContentView方法**
+
+```java
+public void setContentView(@LayoutRes int layoutResID) {
+    getWindow().setContentView(layoutResID);
+    initWindowDecorActionBar();
+}
+```
+
+`getWindow()`方法获取到的就是上面创建好的PhoneWindow对象，我们接着来看PhoneWindow的`setContentView()`方法：
+
+**PhoneWindow的setContentView方法**
+
+```java
+@Override
+public void setContentView(int layoutResID) {
+    if (mContentParent == null) {
+        installDecor();
+    } else if (!hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+        mContentParent.removeAllViews();
+    }
+
+    if (hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+        final Scene newScene = Scene.getSceneForLayout(mContentParent, layoutResID,
+                getContext());
+        transitionTo(newScene);
+    } else {
+        mLayoutInflater.inflate(layoutResID, mContentParent);
+    }
+    mContentParent.requestApplyInsets();
+    final Callback cb = getCallback();
+    if (cb != null && !isDestroyed()) {
+        cb.onContentChanged();
+    }
+    mContentParentExplicitlySet = true;
+}
+```
+
+这里首先会判断mContentParent是否为空，如果为空就调用`installDecor()`方法，否则调用`removeAllViews()`方法移除mContentParent的所有子View。那么这个mContentParent是什么呢，它是一个ViewGroup，我们通过名称可能能够猜到它就是我们页面所展示的内容。全局搜索了一下mContentParent的赋值时机，发现只有在`installDecor()`方法中才会对其赋值，因此这里mContentParent为空，我们来看看`installDecor()`方法：
+
+```java
+private void installDecor() {
+    mForceDecorInstall = false;
+    if (mDecor == null) {
+        mDecor = generateDecor(-1);
+        // ...
+    } else {
+        mDecor.setWindow(this);
+    }
+    if (mContentParent == null) {
+        mContentParent = generateLayout(mDecor);
+
+        // ...
+    }
+}
+
+protected DecorView generateDecor(int featureId) {
+    Context context;
+    if (mUseDecorContext) {
+        Context applicationContext = getContext().getApplicationContext();
+        if (applicationContext == null) {
+            context = getContext();
+        } else {
+            context = new DecorContext(applicationContext, getContext());
+            if (mTheme != -1) {
+                context.setTheme(mTheme);
+            }
+        }
+    } else {
+        context = getContext();
+    }
+    return new DecorView(context, featureId, this, getAttributes());
+}
+
+protected ViewGroup generateLayout(DecorView decor) {
+    TypedArray a = getWindowStyle();
+    // ...
+
+    int layoutResource;
+    // 根据Features（通过requestFeature()方法添加，可以看做是Window的主题样式）设置相应的布局
+    // 伪代码
+    if () {
+        layoutResource =R.layout.xx1;
+    } else if () {
+        layoutResource =R.layout.xx2;
+    } else {
+        layoutResource =R.layout.xx;
+    }
+	// 为DecorView加载布局
+    mDecor.onResourcesLoaded(mLayoutInflater, layoutResource);
+
+    ViewGroup contentParent = (ViewGroup) findViewById(ID_ANDROID_CONTENT);
+    // ...
+
+    return contentParent;
+}
+```
+
+可以看到`installDecor()`方法主要做的事有两件：调用`generateDecor()`方法创建DecorView，将返回值赋给mDecor；调用`generateLayout()`方法创建一个ViewGroup，赋值给mContentParent。这里的`generateDecor()`和`generateLayout()`方法都省略了大量代码，只保留了最核心的部分。
+
+创建好了DecorView和mContentParent之后，我们回到PhoneWindow的`setContentView()`方法，可以发现这之后调用了`mLayoutInflater.inflate(layoutResID, mContentParent)`，`inflate()`方法的作用我们都很熟悉了，就是根据我们传入的布局文件构建出View树，这里调用的是两个参数的方法，因此会将创建好的View树添加到mContentParent中。如果不是很清楚`inflate()`方法几个参数的意义可以查阅网上的相关文章，或者参考我之前写过的一篇文章[LayoutInflate的使用](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/LayoutInflate%E7%9A%84%E4%BD%BF%E7%94%A8.md)，这里我就不具体讲了。现在我们就清楚了mContentParent是什么了吧，它是我们`setContentView()`方法中指定布局的父View，指定的布局会作为一个子View添加到mContentParent中。
+
+我一开始分析时有一个疑问，mContentParent是何时与DecorView产生联系的呢，分析到这里好像并没有看到诸如`mDecor.addView()`之类的代码，我们回到`generateLayout()`方法中，方法内部调用了`findViewById()`方法获取到contentParent，并将其赋给mContentParent，而这个id为content，是DecorView中的一个子View，是一个Framelayout，因此contentParent就是DecorView中的这个子View，mContentParent自然也表示这个子View。`generateLayout()`方法中会根据Window的主题样式为DecorView加载相应的布局，我们就以其中一个**R.layout.screen_simple**为例，看看它的布局层级关系：
+
+**screen_simple.xml**
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+    <ViewStub android:id="@+id/action_mode_bar_stub"
+              android:inflatedId="@+id/action_mode_bar"
+              android:layout="@layout/action_mode_bar"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:theme="?attr/actionBarTheme" />
+    <FrameLayout
+         android:id="@android:id/content"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:foregroundInsidePadding="false"
+         android:foregroundGravity="fill_horizontal|top"
+         android:foreground="?android:attr/windowContentOverlay" />
+</LinearLayout>
+```
+
+可以看到最外层是一个LinearLayout，内部有两个子View，一个是**ViewStub**，它的id为**action_mode_bar_stub**，从名称上大概可以猜出它是页面的标题栏，会根据主题的不同来选择是否加载；另一个子View是id为**content**的**FrameLayout**，也就是上面分析中`findViewById()`方法获取到的contentParent，因此mContentParent就是这个FrameLayout。
+
+看到这里，我们对于整个页面的层级关系就很清楚了，最外层是一个DecorView，它的内部有一个LinearLayout，LinearLayout中有一个FrameLayout，我们在`setContentView()`中指定的布局文件会被添加到这个FrameLayout中，当然实际上根据主题样式的不同可能会更复杂一些，这里只是说明最简单的一种情况。
+
+值得一提的是，**AppCompatActivity**中的`setContentView()`方法和Activity的有所不同，简单分析一下。
 
 **AppCompatActivity的setContentView方法**
 
@@ -17,7 +272,7 @@ public void setContentView(@LayoutRes int layoutResID) {
 }
 ```
 
-
+`getDelegate()`获取到的是一个代理对象，类型为**AppCompatDelegateImpl**（前几个版本的源码中这里会根据SDK版本不同返回不同的对象如**AppCompatDelegateImplN**、**AppCompatDelegateImplV23**等，后面的分析是差不多的），之后调用了AppCompatDelegateImpl的`setContentView()`方法。
 
 **AppCompatDelegateImpl的setContentView方法**
 
@@ -32,35 +287,255 @@ public void setContentView(int resId) {
 }
 ```
 
-
+方法内部首先调用了`ensureSubDecor()`方法，将返回值赋值给mSubDecor：
 
 ```java
-public View inflate(@LayoutRes int resource, @Nullable ViewGroup root) {
-    return inflate(resource, root, root != null);
+private void ensureSubDecor() {
+    if (!mSubDecorInstalled) {
+        mSubDecor = createSubDecor();
+
+        // ...
+    }
+}
+
+private ViewGroup createSubDecor() {
+    TypedArray a = mContext.obtainStyledAttributes(R.styleable.AppCompatTheme);
+
+    // ...
+	// 分析1
+    mWindow.getDecorView();
+
+    final LayoutInflater inflater = LayoutInflater.from(mContext);
+    ViewGroup subDecor = null;
+
+    // 根据主题为subDecor加载布局
+    // 伪代码
+    if () {
+        subDecor = (ViewGroup) LayoutInflater.from(themedContext)
+                .inflate(R.layout.xx, null);
+    } else {
+
+    }
+
+    // ...
+
+  	// 分析2
+    final ContentFrameLayout contentView = (ContentFrameLayout) subDecor.findViewById(
+            R.id.action_bar_activity_content);
+
+    final ViewGroup windowContentView = (ViewGroup) mWindow.findViewById(android.R.id.content);
+    if (windowContentView != null) {
+        // 将windowContentView的子View移除并添加到contentView中
+        while (windowContentView.getChildCount() > 0) {
+            final View child = windowContentView.getChildAt(0);
+            windowContentView.removeViewAt(0);
+            contentView.addView(child);
+        }
+
+        
+        windowContentView.setId(View.NO_ID);
+        contentView.setId(android.R.id.content);
+
+        // ...
+    }
+    
+  	// 分析3
+    mWindow.setContentView(subDecor);
+
+    // ...
+
+    return subDecor;
+}
+```
+
+`ensureSubDecor()`方法内部调用了`createSubDecor()`方法，我们具体分析一下该方法。
+
+**分析1、mWindow.getDecorView()**
+
+mWindow的类型为PhoneWindow，通过查看PhoneWindow的`getDecorView()`方法我们可以发现，由于此时mDecor并未被赋值过，因此会调用此前分析过的`installDecor()`方法，创建DecorView和mContentParent。
+
+```java
+@Override
+public final View getDecorView() {
+    if (mDecor == null || mForceDecorInstall) {
+        installDecor();
+    }
+    return mDecor;
+}
+```
+
+之后和`generateLayout()`方法很类似，通过判断主题样式创建出subDecor，加载不同的布局文件。
+
+**分析2、“偷梁换柱”**
+
+这里的逻辑还是很巧妙的，涉及到了两个View，contentView是subDecor中id为**action_bar_activity_content**的子View，类型为ContentFrameLayout；另一个windowContentView的id为**android.R.id.content**，没错，就是此前分析过的那个FrameLayout。之后的操作是将windowContentView的子View移除，添加到contentView中，并将windowContentView的id设置为View.NO_ID，将contentView的id设置为android.R.id.content，看上去很像是两个View之间的互换，因此我把这个操作称为“偷梁换柱”。
+
+**分析3、mWindow.setContentView(subDecor)**
+
+这里调用了PhoneWindow的`setContentView()`方法，将subDecor添加到了mContentParent中，这里的mContentParent其实就是上面的windowContentView，此时它的id已经变成了View.NO_ID。
+
+这时我们再回到AppCompatDelegateImpl的`setContentView()`方法，之后就是根据我们指定的布局文件构建出View树并添加到id为**android.R.id.content**的ViewGroup中，即上面的ContentFrameLayout。
+
+我的表述不是很清楚，大家可能有些懵了，这都是什么乱七八糟的，我最后总结一下，其实大体上的流程和Activity的`setContentView()`方法还是很类似的，不同之处就是在Activity中，我们指定布局文件对应的View树会被添加到FrameLayout中，而对于AppCompatActivity，View树会被添加到一个ContentFrameLayout中，它们的id均为**android.R.id.content**，层级关系如下，ContentFrameLayout的直接父View是mSubDecor所加载布局的根布局，对应不同的主题样式可能不同，这个根布局的父View就是FrameLayout，因此可以看做就是多嵌套了几层View。
+
+其实这里我就不明白了，我们的Activity都是继承自AppCompatActivity，那么相比于继承自Activity，我们的布局层级是要复杂一些的，大家都知道Android开发中是要避免过多的布局层级嵌套的，那么AppCompatActivity这样做的目的是什么呢？鉴于个人能力和认识都还很浅显，想不明白为什么要这样设计，欢迎大佬们提出自己的见解。
+
+#### 1.2.3.三大流程的调用
+
+上面的两个流程中已经完成了PhoneWindow和DecorView的创建，那么大名鼎鼎的View绘制三大流程又是从何时开始的呢，就是ActivityThread的`handleResumeActivity()` 方法，该方法在分析Activity的启动流程时也分析过，`onResume()`回调方法就是经由该方法调用的。
+
+### 1.3.measure
+
+为了研究View的measure流程，我们首先要介绍两个相关的类：**MeasureSpec**和**LayoutParams**。
+
+#### 1.3.1.MeasureSpec
+
+##### 1.3.1.1.MeasureSpec简介
+
+关于**MeasureSpec**大家可能都很熟悉了，它是由一个32位int值表示的（我想到了MotionEvent），高2位表示**SpecMode**，即测量模式，低30位表示**SpecSize**，即测量尺寸大小。
+
+```java
+public static class MeasureSpec {
+    private static final int MODE_SHIFT = 30;
+    private static final int MODE_MASK = 0x3 << MODE_SHIFT;
+
+    // 省略部分代码...
+	
+  	/**
+     * 三种测量模式
+     */
+    public static final int UNSPECIFIED = 0 << MODE_SHIFT;
+
+    public static final int EXACTLY = 1 << MODE_SHIFT;
+
+    public static final int AT_MOST = 2 << MODE_SHIFT;
+
+    /**
+     * 根据测量尺寸和测量模式生成MeasureSpec
+     */
+    public static int makeMeasureSpec(@IntRange(from = 0, to = (1 << MeasureSpec.MODE_SHIFT) - 1) int size,
+                                      @MeasureSpecMode int mode) {
+        if (sUseBrokenMakeMeasureSpec) {
+            return size + mode;
+        } else {
+            return (size & ~MODE_MASK) | (mode & MODE_MASK);
+        }
+    }
+
+  	/**
+     * 获得测量模式
+     */
+    @MeasureSpecMode
+    public static int getMode(int measureSpec) {
+        //noinspection ResourceType
+        return (measureSpec & MODE_MASK);
+    }
+
+  	/**
+     * 获得测量尺寸
+     */
+    public static int getSize(int measureSpec) {
+        return (measureSpec & ~MODE_MASK);
+    }
+
+    // 省略部分代码...
+}
+```
+
+可以通过调用`getMode()`和`getSize()`方法获取到测量模式和测量尺寸，方法内部就是通过简单的位运算保留指定位数上的数值。不由得称赞Android系统开发人员的设计巧妙，将两个值封装成了一个变量，可以通过位运算获取相应数值，减少了多余对象的内存分配，其实Android源码中很多地方都有类似设计，这里就不多提啦。
+
+MeasureSpec内部定义了三种测量模式：
+
+* **UNSPECIFIED**：父View不会限制子View的大小，一般用于系统内部，开发中使用很少
+* **EXACTLY**：父View能够确定子View的大小，对应两种情况：**精确尺寸（dp或px）**和**match_parent**
+* **AT_MOST**：子View的大小不能超过父View尺寸，具体尺寸需要由子View自身来确定，对应**wrap_content**
+
+##### 1.3.1.2.如何确定MeasureSpec的值
+
+MeasureSpec的值是由**View自身的LayoutParams**和**父View的MeasureSpec**共同确定的。
+
+```java
+public static int getChildMeasureSpec(int spec, int padding, int childDimension) {
+    int specMode = MeasureSpec.getMode(spec);
+    int specSize = MeasureSpec.getSize(spec);
+
+    int size = Math.max(0, specSize - padding);
+
+    int resultSize = 0;
+    int resultMode = 0;
+
+    switch (specMode) {
+        // Parent has imposed an exact size on us
+        case MeasureSpec.EXACTLY:
+            if (childDimension >= 0) {
+                resultSize = childDimension;
+                resultMode = MeasureSpec.EXACTLY;
+            } else if (childDimension == LayoutParams.MATCH_PARENT) {
+                // Child wants to be our size. So be it.
+                resultSize = size;
+                resultMode = MeasureSpec.EXACTLY;
+            } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+                // Child wants to determine its own size. It can't be
+                // bigger than us.
+                resultSize = size;
+                resultMode = MeasureSpec.AT_MOST;
+            }
+            break;
+
+        // Parent has imposed a maximum size on us
+        case MeasureSpec.AT_MOST:
+            if (childDimension >= 0) {
+                // Child wants a specific size... so be it
+                resultSize = childDimension;
+                resultMode = MeasureSpec.EXACTLY;
+            } else if (childDimension == LayoutParams.MATCH_PARENT) {
+                // Child wants to be our size, but our size is not fixed.
+                // Constrain child to not be bigger than us.
+                resultSize = size;
+                resultMode = MeasureSpec.AT_MOST;
+            } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+                // Child wants to determine its own size. It can't be
+                // bigger than us.
+                resultSize = size;
+                resultMode = MeasureSpec.AT_MOST;
+            }
+            break;
+
+        // Parent asked to see how big we want to be
+        case MeasureSpec.UNSPECIFIED:
+            if (childDimension >= 0) {
+                // Child wants a specific size... let him have it
+                resultSize = childDimension;
+                resultMode = MeasureSpec.EXACTLY;
+            } else if (childDimension == LayoutParams.MATCH_PARENT) {
+                // Child wants to be our size... find out how big it should
+                // be
+                resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
+                resultMode = MeasureSpec.UNSPECIFIED;
+            } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+                // Child wants to determine its own size.... find out how
+                // big it should be
+                resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
+                resultMode = MeasureSpec.UNSPECIFIED;
+            }
+            break;
+    }
+    //noinspection ResourceType
+    return MeasureSpec.makeMeasureSpec(resultSize, resultMode);
 }
 ```
 
 
 
-## 1.2.measure
-
-为了研究View的measure流程，我们首先要介绍两个相关的类：**MeasureSpec**和**LayoutParams**。
-
-### 1.2.1.MeasureSpec
-
-MeasureSpec是由一个32位int值表示的（我想到了MotionEvent），高2位表示，低30位表示。
-
 | 子View\父View  | EXACTLY | AT_MOST | UNSPECIFIED |
 | ------------ | ------- | ------- | ----------- |
-| 具体数值         | EXACTLY |         |             |
-| match_parent | EXACTLY |         |             |
-| wrap_content | AT_MOST |         |             |
+| 具体数值         | EXACTLY | EXACTLY | EXACTLY     |
+| match_parent | EXACTLY | AT_MOST | UNSPECIFIED |
+| wrap_content | AT_MOST | AT_MOST | UNSPECIFIED |
 
+#### 1.3.2.LayoutParams
 
-
-### 1.2.2.LayoutParams
-
-#### 1.2.2.1.LayoutParams简介
+##### 1.3.2.1.LayoutParams简介
 
 **LayoutParams**这个类在开发中还是很常见的，顾名思义就是布局参数，View中定义了一个LayoutParams类型的成员变量，它的作用就是确定View的宽高，我们平时在xml布局文件中指定的**layout_width**和**layout_height**参数就是用于生成LayoutParams。需要注意的是，这两个属性的前面都带上layout前缀，而不是直接使用**width**和**height**来命名，因此我们要清楚它们的值并不是View的宽高，也可以说它们并不属于View自身的属性。
 
@@ -125,7 +600,7 @@ public static class LayoutParams {
 
 LayoutParams中定义了几个重载构造函数，分别用于xml文件中指定宽高、手动指定宽高等场景。每个ViewGroup的子类（直接或间接继承）都有对应的LayoutParams类，比如**LinearLayout.LayoutParams**，在各自的LayoutParams中可以定义相应的布局参数属性。因此不止**layout_width**和**layout_height**这两个属性，其他以layout开头的属性（比如**layout_weight**、**layout_margin**等等）也都和布局参数相关。
 
-#### 1.2.2.2.View的LayoutParams属性是何时设置的
+##### 1.3.2.2.View的LayoutParams属性是何时设置的
 
 了解了LayoutParams的定义后，接下来需要弄清楚View的LayoutParams属性是何时设置的，我们知道在ViewGroup中添加子View的方式有两种：xml文件中添加和代码中添加，我们分别来看一下这两种情况。
 
@@ -323,7 +798,7 @@ protected LayoutParams generateLayoutParams(ViewGroup.LayoutParams p) {
 
 之后就是为View设置LayoutParams属性了，这里会判断传入的`preventRequestLayout`参数值，如果为true就直接对View的mLayoutParams变量赋值；如果为false则调用`setLayoutParams()`方法来给View设置LayoutParams，这两种情况的区别就是`setLayoutParams()`方法内部会调用`requestLayout()`方法来重新进行View的measure、layout和draw流程。可以看到由于`addView()`方法调用`addViewInner()`时传入的参数为false，因此这里会执行`setLayoutParams()`方法。额外提一下，ViewGroup中有一个`addViewInLayout()`方法，和`addView()`方法类似，内部也调用了`addViewInner()`方法，不过该方法可以显式地指定`preventRequestLayout`参数的值。
 
-#### 1.2.2.3.自定义LayoutParams须知
+##### 1.3.2.3.自定义LayoutParams须知
 
 看到这里关于LayoutParams的作用和使用原理基本上就介绍得差不多了，最后再简单介绍自定义LayoutParams。我们在自定义ViewGroup的同时，根据需求可能需要自定义LayoutParams，这里就以我们最熟悉的**LinearLayout**来看一下有哪些需要注意的地方吧。
 
@@ -393,11 +868,15 @@ final LayoutParams lp = (LayoutParams) child.getLayoutParams();
 
 因此我们在调用`setLayoutParams()`还是应该保证传入的LayoutParams类型正确。
 
-## 1.3.layout
+#### 1.3.3.measure流程
 
+#### 1.3.4.补充
 
+##### 1.3.4.1.关于MeasureSpec.UNSPECIFIED
 
-## 1.4.draw
+### 1.4.layout
+
+### 1.5.draw
 
 
 
@@ -407,7 +886,7 @@ final LayoutParams lp = (LayoutParams) child.getLayoutParams();
 
 自定义View的过程中有一些需要注意的地方，处理不好可能会导致设置的属性不生效等问题，影响View的显示和使用。
 
-### 1.支持wrap_content
+### 2.1.支持wrap_content
 
 自定义View需要重写`onMeasure()`方法来支持`wrap_content`属性，否则View的显示效果会和`match_parent`一样，即占满父布局，原因可以查看View的`onMeasure()`方法。
 
@@ -433,7 +912,7 @@ protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 }
 ```
 
-### 2.支持padding
+### 2.2.支持padding
 
 如果是直接继承自View需要在`onDraw()`方法中处理`padding`的值，否则不会生效。如果是继承自ViewGroup需要在`onMeasure()`和`onLayout()`方法中考虑`padding`和子View的`margin`属性影响，否则`padding`和子View的`margin`不会生效。
 
@@ -456,15 +935,15 @@ protected void onDraw(Canvas canvas) {
 }
 ```
 
-### 3.避免使用Handler
+### 2.3.避免使用Handler
 
 View的内部本身提供了post系列的方法，完全可以替代Handler的作用，除非很明确地需要Handler来发送消息。
 
-### 4. 防止内存泄漏
+### 2.4. 防止内存泄漏
 
 当View退出或不可见时需要及时停止线程和动画，否则可能会导致内存泄漏。可以在`onDetachedFromWindow()`方法中来处理，当包含此View的Activity退出或当前View被remove时会被调用。与此方法对应的是`onAttachedToWindow()` ，该方法会在包含此View的Activity启动时被调用。
 
-### 5.处理好滑动冲突
+### 2.5.处理好滑动冲突
 
 当自定义View涉及到嵌套滑动时需要处理好滑动冲突。
 
@@ -478,7 +957,7 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 **a^b: 取出a与b的不同部分;**
 
-### 1.invalidate
+### 3.1.invalidate
 
 ```java
 
@@ -486,7 +965,7 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 
 
-### 2.requestLayout
+### 3.2.requestLayout
 
 ```java
 
