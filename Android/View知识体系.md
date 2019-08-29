@@ -4,7 +4,7 @@
 
 > **前言**
 >
-> View可以说是我们在Android开发中接触得最多的一个类了，虽然不属于四大组件，但是起到的作用却一点都不亚于四大组件，页面中的各种控件、布局都直接或间接地继承自View，可以说View无处不在。因而了解View的工作原理能让我们更好地处理开发中的诸多问题，尤其是对于老生常谈的自定义View来说，View的工作原理更是必须要掌握的。
+> View可以说是我们在Android开发中接触得最多的一个类了，虽然不属于四大组件，但是发挥的作用却一点都不亚于四大组件，页面中的各种控件、布局都直接或间接地继承自View，可以说View无处不在。因而了解View的工作原理能让我们更好地处理开发中的诸多问题，尤其是对于老生常谈的自定义View来说，View的工作原理更是必须要掌握的。
 
 在进入正文之前还是要强调一下，**本文的分析基于Android 9.0（API Level 28）的源码**，不同版本的源码可能会有不同，但是基本思路不会变化太多，可以进行参考。
 
@@ -24,7 +24,7 @@
 
 **DecorView**是最顶层的View，是整个视图的根节点，继承自FrameLayout，因此它也是一个ViewGroup。下面以一张图来展示可能更直观一些。
 
-
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/Android%E8%A7%86%E5%9B%BE%E5%B1%82%E7%BA%A7.png?raw=true)
 
 DecorView下包含一个竖直方向的LinearLayout，它的内部根据页面主题的不同可能会有所不同，但是一定会包含一个子View，它的id为**android.R.id.content**，是一个FrameLayout，我们调用`setContentView()`设置的布局就是添加到了这个contentView中。
 
@@ -293,7 +293,6 @@ public void setContentView(int resId) {
 private void ensureSubDecor() {
     if (!mSubDecorInstalled) {
         mSubDecor = createSubDecor();
-
         // ...
     }
 }
@@ -384,22 +383,215 @@ public final View getDecorView() {
 
 上面的两个流程中已经完成了PhoneWindow和DecorView的创建，那么大名鼎鼎的View绘制三大流程又是从何时开始的呢，就是ActivityThread的`handleResumeActivity()` 方法，该方法在分析Activity的启动流程时也分析过，`onResume()`回调方法就是经由该方法调用的。
 
+**ActivityThread的handleResumeActivity方法**
+
+```java
+@Override
+public void handleResumeActivity(IBinder token, boolean finalStateRequest, boolean isForward,
+                                 String reason) {
+    // ...
+    // 方法内部调用Activity的onResume()方法
+    final ActivityClientRecord r = performResumeActivity(token, finalStateRequest, reason);
+    // ...
+
+    final Activity a = r.activity;
+
+    // ...
+
+    if (r.window == null && !a.mFinished && willBeVisible) {
+        r.window = r.activity.getWindow();
+        // 获取DecorView
+        View decor = r.window.getDecorView();
+        // 将DecorView设置为不可见
+        decor.setVisibility(View.INVISIBLE);
+        // 获取WindowManager
+        ViewManager wm = a.getWindowManager();
+        WindowManager.LayoutParams l = r.window.getAttributes();
+        // 为Activity的mDecor对象赋值
+        a.mDecor = decor;
+        // ...
+        if (a.mVisibleFromClient) {
+            if (!a.mWindowAdded) {
+                a.mWindowAdded = true;
+                // 将DecorView添加到Window中
+                wm.addView(decor, l);
+            } else {
+                a.onWindowAttributesChanged(l);
+            }
+        }
+    }
+    // ...
+    if (!r.activity.mFinished && willBeVisible && r.activity.mDecor != null && !r.hideForNow) {
+        // ...
+        if (r.activity.mVisibleFromClient) {
+            // 将DecorView设置为可见
+            r.activity.makeVisible();
+        }
+    }
+}
+```
+
+该方法主要做了两件事：调用`performResumeActivity()`方法，进而调用Activity的生命周期回调`onResume()`；获取此前创建好的PhoneWindow、DecorView以及WindowManager对象，调用WindowManager的`addView()`方法将DecorView添加到Window中。前面也说过，WindowManager的实现类是WindowManagerImpl，因此我们来具体看一下WindowManagerImpl的`addView()`方法都做了些什么。
+
+**WindowManagerImpl的addView方法**
+
+```java
+@Override
+public void addView(@NonNull View view, @NonNull ViewGroup.LayoutParams params) {
+    applyDefaultToken(params);
+    mGlobal.addView(view, params, mContext.getDisplay(), mParentWindow);
+}
+```
+
+方法内部调用了mGlobal的`addView()`方法，mGlobal的类型为WindowManagerGlobal，我们接着看：
+
+**WindowManagerGlobal的addView方法**
+
+```java
+public void addView(View view, ViewGroup.LayoutParams params,
+                    Display display, Window parentWindow) {
+    // ...
+
+    ViewRootImpl root;
+    // ...
+    // 创建ViewRootImpl对象
+    root = new ViewRootImpl(view.getContext(), display);
+  
+    view.setLayoutParams(wparams);
+
+    mViews.add(view);
+    mRoots.add(root);
+    mParams.add(wparams);
+
+    try {
+      	// 核心代码
+        root.setView(view, wparams, panelParentView);
+    } catch (RuntimeException e) {
+        // BadTokenException or InvalidDisplayException, clean up.
+        if (index >= 0) {
+            removeViewLocked(index, true);
+        }
+        throw e;
+    }
+}
+```
+
+`addView()`方法内部首先会创建出ViewRootImpl对象，将要添加的View（即DecorView）、ViewRootImpl和布局参数添加到列表中，最后调用ViewRootImpl的`setView()`方法，我们来看一下这个方法。
+
+**ViewRootImpl的setView方法**
+
+```java
+public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView) {
+    synchronized (this) {
+        if (mView == null) {
+            mView = view;
+            // ...
+            requestLayout();
+            // ...
+        }
+    }
+}
+```
+
+`setView()`方法内部调用了`requestLayout()`方法，这个方法可能大家在自定义View时用到过，用于刷新视图，不过需要注意的是，我们在自定义View中调用的`requestLayout()`方法是在View中定义的，和ViewRootImpl中的逻辑是不一样的，之后会详细分析一下。接下来我们就来看看ViewRootImpl的`requestLayout()`方法：
+
+```java
+@Override
+public void requestLayout() {
+    if (!mHandlingLayoutInLayoutRequest) {
+        checkThread();
+        mLayoutRequested = true;
+        scheduleTraversals();
+    }
+}
+```
+
+方法内部又调用了`scheduleTraversals()`方法：
+
+```java
+void scheduleTraversals() {
+    if (!mTraversalScheduled) {
+        mTraversalScheduled = true;
+      	// 开启同步屏障机制
+        mTraversalBarrier = mHandler.getLooper().getQueue().postSyncBarrier();
+      	// 利用Handler发送一条异步消息
+        mChoreographer.postCallback(
+                Choreographer.CALLBACK_TRAVERSAL, mTraversalRunnable, null);
+        // ...
+    }
+}
+```
+
+`scheduleTraversals()`方法内部首先执行了`mHandler.getLooper().getQueue().postSyncBarrier()`，这行代码的作用是开启Handler的同步屏障机制，关于Handler的同步屏障机制，我这里简单解释一下（因为我也不是很了解o(╥﹏╥)o），我们都知道Handler处理的消息是放到一个消息队列中的，消息默认情况下都是同步的，如果需要发送异步消息需要使用代码来声明，同步屏障机制就使得Looper在从消息队列中获取消息时，只获取异步消息并进行处理。我可能解释得不太好，如果想深入了解一下Handler的同步屏障机制可以自行查找资料，这里推荐一下鸿洋大神WanAndroid上的每日一问[Handler应该是大家再熟悉不过的类了，那么其中有个同步屏障机制，你了解多少呢？](https://www.wanandroid.com/wenda/show/8710)。开启了同步屏障后，调用了mChoreographer的`postCallback()`方法，该方法内部就是利用了Handler，发送了一个Runable对象，如果跟踪源码的话可以发现最后会把Runable封装为一个Message，并将Message设置为异步消息，我就不展示了。清楚了`postCallback()`方法的原理后，我们就知道了需要分析mTraversalRunnable对象，它是一个Runable对象，类型为**TraversalRunnable** ，在`run()`方法中调用了`doTraversal()`方法。
+
+```java
+final class TraversalRunnable implements Runnable {
+    @Override
+    public void run() {
+        doTraversal();
+    }
+}
+```
+
+由于开启了同步屏障，因此当前线程（主线程）的Looper会优先获取异步消息，即直接执行`doTraversal()`方法。
+
+```java
+void doTraversal() {
+    if (mTraversalScheduled) {
+        mTraversalScheduled = false;
+      	// 关闭同步屏障
+        mHandler.getLooper().getQueue().removeSyncBarrier(mTraversalBarrier);
+        // ...
+        performTraversals();
+        // ...
+    }
+}
+```
+
+`doTraversal()`方法内部首先会关闭同步屏障机制，否则主线程的同步消息就永远无法被处理了，然后调用了`performTraversals()`方法，我们来看一下：
+
+```java
+private void performTraversals() {
+    // ...
+    // 调用performMeasure()方法开始measure流程
+    measureHierarchy(host, lp, res,
+            desiredWindowWidth, desiredWindowHeight);
+    // ...
+    // 开始layout流程
+    performLayout(lp, mWidth, mHeight);
+    // ...
+    // 开始draw流程
+    performDraw();
+    // ...
+}
+```
+
+这里省略了大量代码，可以看出，在`performTraversals()`方法内会依次调用`measureHierarchy()` 、`performLayout()`、`performDraw()`，进而开始View的三大流程。
+
+分析到这里，View的绘制准备阶段就算完成了，最后再回顾一下，主要分为三个阶段：
+
+* Activity的`onCreate()`方法调用之前，创建Window（PhoneWindow）
+* Activity的`onCreate()`方法中调用`setContentView()`方法，创建DecorView和contentView（页面内容根布局），将指定的布局文件加载到contentView中
+* Activity的`onResume()`方法调用之后，将DecorView添加到Window中，之后依次开始View的measure、layout和draw流程
+
+从上面几个流程的先后顺序我们就能清楚为什么在`onResume()`方法中或者`onResume()`方法之前获取不到View的宽高，就是因为此时View还未执行measure流程。
+
 ### 1.3.measure
 
-为了研究View的measure流程，我们首先要介绍两个相关的类：**MeasureSpec**和**LayoutParams**。
+到这里算是正式进入到了View的三大流程，首先要分析的是measure流程。在分析View的measure流程之前，我们首先要介绍两个相关的类：**MeasureSpec**和**LayoutParams**。
 
 #### 1.3.1.MeasureSpec
 
 ##### 1.3.1.1.MeasureSpec简介
 
-关于**MeasureSpec**大家可能都很熟悉了，它是由一个32位int值表示的（我想到了MotionEvent），高2位表示**SpecMode**，即测量模式，低30位表示**SpecSize**，即测量尺寸大小。
+关于**MeasureSpec**大家可能都很熟悉了，它是由一个32位int值表示的，高2位表示**SpecMode**，即测量模式，低30位表示**SpecSize**，即测量尺寸大小。
 
 ```java
 public static class MeasureSpec {
     private static final int MODE_SHIFT = 30;
     private static final int MODE_MASK = 0x3 << MODE_SHIFT;
 
-    // 省略部分代码...
+    // ...
 	
   	/**
      * 三种测量模式
@@ -438,11 +630,11 @@ public static class MeasureSpec {
         return (measureSpec & ~MODE_MASK);
     }
 
-    // 省略部分代码...
+    // ...
 }
 ```
 
-可以通过调用`getMode()`和`getSize()`方法获取到测量模式和测量尺寸，方法内部就是通过简单的位运算保留指定位数上的数值。不由得称赞Android系统开发人员的设计巧妙，将两个值封装成了一个变量，可以通过位运算获取相应数值，减少了多余对象的内存分配，其实Android源码中很多地方都有类似设计，这里就不多提啦。
+可以通过调用`getMode()`和`getSize()`方法获取到测量模式和测量尺寸，方法内部就是通过简单的位运算保留指定位数上的数值。不由得称赞Android系统开发人员的设计巧妙，将两个值封装成了一个变量，可以通过位运算获取相应数值，减少了多余对象的内存分配，其实Android源码中很多地方都有类似设计（比如MotionEvent），这里就不多提啦。
 
 MeasureSpec内部定义了三种测量模式：
 
@@ -450,9 +642,13 @@ MeasureSpec内部定义了三种测量模式：
 * **EXACTLY**：父View能够确定子View的大小，对应两种情况：**精确尺寸（dp或px）**和**match_parent**
 * **AT_MOST**：子View的大小不能超过父View尺寸，具体尺寸需要由子View自身来确定，对应**wrap_content**
 
+虽然我们在开发中用到**UNSPECIFIED**模式的情况不多，但是了解一下还是有必要的，我在后面会单独介绍一下这个模式的应用。
+
 ##### 1.3.1.2.如何确定MeasureSpec的值
 
-MeasureSpec的值是由**View自身的LayoutParams**和**父View的MeasureSpec**共同确定的。
+MeasureSpec的值是由**View自身的LayoutParams**和**父View的MeasureSpec**共同确定的。对于特定的View来说，它的MeasureSpec是通过父View（即ViewGroup）的`getChildMeasureSpec()`方法得到的。
+
+**ViewGroup的getChildMeasureSpec方法**
 
 ```java
 public static int getChildMeasureSpec(int spec, int padding, int childDimension) {
@@ -465,62 +661,45 @@ public static int getChildMeasureSpec(int spec, int padding, int childDimension)
     int resultMode = 0;
 
     switch (specMode) {
-        // Parent has imposed an exact size on us
         case MeasureSpec.EXACTLY:
             if (childDimension >= 0) {
                 resultSize = childDimension;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.MATCH_PARENT) {
-                // Child wants to be our size. So be it.
                 resultSize = size;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.WRAP_CONTENT) {
-                // Child wants to determine its own size. It can't be
-                // bigger than us.
                 resultSize = size;
                 resultMode = MeasureSpec.AT_MOST;
             }
             break;
 
-        // Parent has imposed a maximum size on us
         case MeasureSpec.AT_MOST:
             if (childDimension >= 0) {
-                // Child wants a specific size... so be it
                 resultSize = childDimension;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.MATCH_PARENT) {
-                // Child wants to be our size, but our size is not fixed.
-                // Constrain child to not be bigger than us.
                 resultSize = size;
                 resultMode = MeasureSpec.AT_MOST;
             } else if (childDimension == LayoutParams.WRAP_CONTENT) {
-                // Child wants to determine its own size. It can't be
-                // bigger than us.
                 resultSize = size;
                 resultMode = MeasureSpec.AT_MOST;
             }
             break;
 
-        // Parent asked to see how big we want to be
         case MeasureSpec.UNSPECIFIED:
             if (childDimension >= 0) {
-                // Child wants a specific size... let him have it
                 resultSize = childDimension;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.MATCH_PARENT) {
-                // Child wants to be our size... find out how big it should
-                // be
                 resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
                 resultMode = MeasureSpec.UNSPECIFIED;
             } else if (childDimension == LayoutParams.WRAP_CONTENT) {
-                // Child wants to determine its own size.... find out how
-                // big it should be
                 resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
                 resultMode = MeasureSpec.UNSPECIFIED;
             }
             break;
     }
-    //noinspection ResourceType
     return MeasureSpec.makeMeasureSpec(resultSize, resultMode);
 }
 ```
@@ -532,6 +711,16 @@ public static int getChildMeasureSpec(int spec, int padding, int childDimension)
 | 具体数值         | EXACTLY | EXACTLY | EXACTLY     |
 | match_parent | EXACTLY | AT_MOST | UNSPECIFIED |
 | wrap_content | AT_MOST | AT_MOST | UNSPECIFIED |
+
+对于DecorView来说，它是没有父View的，那么它的MeasureSpec是如何得到的呢？我们在上一节分析到ViewRootImpl的`performTraversals()`方法时，介绍到方法内部调用了`measureHierarchy()`方法，进而调用`performMeasure()`方法开始View的measure流程，现在我们就来具体看一下`performMeasure()`方法。
+
+**ViewRootImpl的performMeasure方法**
+
+```java
+
+```
+
+
 
 #### 1.3.2.LayoutParams
 
@@ -870,11 +1059,23 @@ final LayoutParams lp = (LayoutParams) child.getLayoutParams();
 
 #### 1.3.3.measure流程
 
-#### 1.3.4.补充
+##### 1.3.3.1.单一View的measure流程
 
-##### 1.3.4.1.关于MeasureSpec.UNSPECIFIED
+
+
+##### 1.3.3.2.ViewGroup的measure流程
+
+
+
+#### 1.3.4.补充介绍
+
+##### 1.3.4.1.MeasureSpec.UNSPECIFIED的应用
+
+
 
 ### 1.4.layout
+
+
 
 ### 1.5.draw
 
@@ -947,7 +1148,13 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 当自定义View涉及到嵌套滑动时需要处理好滑动冲突。
 
-## 3.invalidate和requestLayout的区别
+## 3.开发中的常见问题
+
+### 3.1.View获取宽高
+
+
+
+### 3.2.invalidate和requestLayout的区别
 
 **a|b: 添加标志位b;**
 
@@ -957,21 +1164,25 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 **a^b: 取出a与b的不同部分;**
 
-### 3.1.invalidate
-
-```java
-
-```
+#### 3.2.1.invalidate
 
 
 
-### 3.2.requestLayout
-
-```java
-
-```
+#### 3.2.2.requestLayout
 
 
 
-## 4.View获取宽高
+
+
+## 4.个人目前的一些疑问
+
+### 4.1.setContentView()方法只能在onCreate()中调用吗
+
+
+
+### 4.2.AppCompatActivity布局层级更深的原因
+
+
+
+
 
