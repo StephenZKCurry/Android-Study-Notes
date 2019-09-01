@@ -24,7 +24,7 @@
 
 **DecorView**是最顶层的View，是整个视图的根节点，继承自FrameLayout，因此它也是一个ViewGroup。下面以一张图来展示可能更直观一些。
 
-![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/Android%E8%A7%86%E5%9B%BE%E5%B1%82%E7%BA%A7.png?raw=true)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/Android%E8%A7%86%E5%9B%BE%E5%B1%82%E7%BA%A7.jpg?raw=true)
 
 DecorView下包含一个竖直方向的LinearLayout，它的内部根据页面主题的不同可能会有所不同，但是一定会包含一个子View，它的id为**android.R.id.content**，是一个FrameLayout，我们调用`setContentView()`设置的布局就是添加到了这个contentView中。
 
@@ -651,29 +651,44 @@ MeasureSpec的值是由**View自身的LayoutParams**和**父View的MeasureSpec**
 **ViewGroup的getChildMeasureSpec方法**
 
 ```java
+/**
+ * 获得子View的MeasureSpec
+ *
+ * @param spec           父View的MeasureSpec
+ * @param padding        父View的padding
+ * @param childDimension 子View的LayoutParams指定的宽/高
+ * @return
+ */
 public static int getChildMeasureSpec(int spec, int padding, int childDimension) {
-    int specMode = MeasureSpec.getMode(spec);
+    // 获得父View的测量模式和测量尺寸
+  	int specMode = MeasureSpec.getMode(spec);
     int specSize = MeasureSpec.getSize(spec);
-
+	
+  	// 父View实际可用大小
     int size = Math.max(0, specSize - padding);
 
     int resultSize = 0;
     int resultMode = 0;
 
     switch (specMode) {
+        // 父View的测量模式为EXACTLY，即match_parent或精确尺寸
         case MeasureSpec.EXACTLY:
             if (childDimension >= 0) {
+              	// 子View的LayoutParams指定为精确的值
                 resultSize = childDimension;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.MATCH_PARENT) {
+              	// 子View的LayoutParams指定为MATCH_PARENT
                 resultSize = size;
                 resultMode = MeasureSpec.EXACTLY;
             } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+              	// 子View的LayoutParams指定为WRAP_CONTENT
                 resultSize = size;
                 resultMode = MeasureSpec.AT_MOST;
             }
             break;
 
+        // 父View的测量模式为AT_MOST，即wrap_content
         case MeasureSpec.AT_MOST:
             if (childDimension >= 0) {
                 resultSize = childDimension;
@@ -687,6 +702,7 @@ public static int getChildMeasureSpec(int spec, int padding, int childDimension)
             }
             break;
 
+        // 父View的测量模式为UNSPECIFIED
         case MeasureSpec.UNSPECIFIED:
             if (childDimension >= 0) {
                 resultSize = childDimension;
@@ -704,29 +720,76 @@ public static int getChildMeasureSpec(int spec, int padding, int childDimension)
 }
 ```
 
+`getChildMeasureSpec()`方法也验证了子View的MeasureSpec是由父View的MeasureSpec和子View的LayoutParams共同确定的。上面的判断可能有些复杂，不过别担心。已经有很多大佬总结出了表格，看起来更加直观一些，下图摘自[Carson_Ho大佬的博客](https://www.jianshu.com/p/1dab927b2f36)，表中的childSize表示子View的LayoutParams指定的大小，parentSize表示父View可用空间的大小。
 
+![](https://upload-images.jianshu.io/upload_images/944365-76261325e6576361.png?imageMogr2/auto-orient/)
 
-| 子View\父View  | EXACTLY | AT_MOST | UNSPECIFIED |
-| ------------ | ------- | ------- | ----------- |
-| 具体数值         | EXACTLY | EXACTLY | EXACTLY     |
-| match_parent | EXACTLY | AT_MOST | UNSPECIFIED |
-| wrap_content | AT_MOST | AT_MOST | UNSPECIFIED |
+我们可以先不去看最后一列**UNSPECIFIED**的情况，单看前两列可以找出一定的规律：
 
-对于DecorView来说，它是没有父View的，那么它的MeasureSpec是如何得到的呢？我们在上一节分析到ViewRootImpl的`performTraversals()`方法时，介绍到方法内部调用了`measureHierarchy()`方法，进而调用`performMeasure()`方法开始View的measure流程，现在我们就来具体看一下`performMeasure()`方法。
+* 当子View的LayoutParams指定为精确数值时，不管父View的测量模式是什么，子View的测量模式均为**EXACTLY**，测量尺寸为LayoutParams指定的值
+* 当子View的LayoutParams指定为match_parent时，子View的测量模式取决于父View，即如果父View的测量模式为**EXACTLY**，那么子View的测量模式为**EXACTLY**；如果父View的测量模式为**AT_MOST**，那么子View的测量模式为**AT_MOST**，子View的测量尺寸均为父View可用空间大小
+* 当子View的LayoutParams指定为wrap_content时，不管父View的测量模式是什么，子View的测量模式均为**AT_MOST**，测量尺寸为父View可用空间大小
 
-**ViewRootImpl的performMeasure方法**
+普通View的MeasureSpec是如何获取的我们已经清楚了，那么对于DecorView来说，它是没有父View的，它的MeasureSpec是如何得到的呢？我们在上一节分析到ViewRootImpl的`performTraversals()`方法时，介绍到方法内部调用了`measureHierarchy()`方法，进而调用`performMeasure()`方法开始View的measure流程，现在我们就来具体看一下`measureHierarchy()`方法。
+
+**ViewRootImpl的measureHierarchy方法**
 
 ```java
+private boolean measureHierarchy(final View host, final WindowManager.LayoutParams lp,
+                                 final Resources res, final int desiredWindowWidth, final int desiredWindowHeight) {
+    int childWidthMeasureSpec;
+    int childHeightMeasureSpec;
+  	boolean windowSizeMayChange = false;
+    // ...
+	
+    childWidthMeasureSpec = getRootMeasureSpec(desiredWindowWidth, lp.width);
+    childHeightMeasureSpec = getRootMeasureSpec(desiredWindowHeight, lp.height);
+    performMeasure(childWidthMeasureSpec, childHeightMeasureSpec);
+    // ...
+    return windowSizeMayChange;
+}
+
+private void performMeasure(int childWidthMeasureSpec, int childHeightMeasureSpec) {
+    if (mView == null) {
+        return;
+    }
+    // ...
+    mView.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+}
+```
+
+可以看出这里调用`getRootMeasureSpec()`方法获取到childWidthMeasureSpec和childHeightMeasureSpec，之后调用`performMeasure()`方法，方法内部又调用了mView的`measure()`方法，这个mView是什么呢，我全文检索了一下mView的赋值时机，发现它是在`setView()`方法中被赋值的，还记得`setView()`方法是什么时候调用的吗，就是在`handleResumeActivity()`方法中调用`wm.addView(decor,l)`这行代码之后被调用的，因此这里的mView就是传过来的DecorView，调用`measure()`方法就开始了对DecorView的测量流程。现在就要关注childWidthMeasureSpec和childHeightMeasureSpec了，这两个值就是DecorView的MeasureSpec，我们来看一下获取到这两个值的`getRootMeasureSpec()`方法：
+
+```java
+private static int getRootMeasureSpec(int windowSize, int rootDimension) {
+    int measureSpec;
+    switch (rootDimension) {
+		case ViewGroup.LayoutParams.MATCH_PARENT:
+            measureSpec = MeasureSpec.makeMeasureSpec(windowSize, MeasureSpec.EXACTLY);
+            break;
+        case ViewGroup.LayoutParams.WRAP_CONTENT:
+            measureSpec = MeasureSpec.makeMeasureSpec(windowSize, MeasureSpec.AT_MOST);
+            break;
+        default:
+            measureSpec = MeasureSpec.makeMeasureSpec(rootDimension, MeasureSpec.EXACTLY);
+            break;
+    }
+    return measureSpec;
 
 ```
 
+逻辑还是比较简单的，参数windowSize传递过来的值是desiredWindowWidth和desiredWindowHeight，通过查看源码可以发现这两个值表示屏幕的宽高尺寸，因此我们可以得出以下结论：
 
+* DecorView的LayoutParams指定为**MATCH_PARENT**时，它的测量模式为**EXACTLY**，测量尺寸为屏幕尺寸
+* DecorView的LayoutParams指定为**WRAP_CONTENT**时，它的测量模式为**WRAP_CONTENT**，测量尺寸为屏幕尺寸
+
+可以看出，DecorView作为最顶层的View，它的MeasureSpec只取决于自己的LayoutParams参数。
 
 #### 1.3.2.LayoutParams
 
 ##### 1.3.2.1.LayoutParams简介
 
-**LayoutParams**这个类在开发中还是很常见的，顾名思义就是布局参数，View中定义了一个LayoutParams类型的成员变量，它的作用就是确定View的宽高，我们平时在xml布局文件中指定的**layout_width**和**layout_height**参数就是用于生成LayoutParams。需要注意的是，这两个属性的前面都带上layout前缀，而不是直接使用**width**和**height**来命名，因此我们要清楚它们的值并不是View的宽高，也可以说它们并不属于View自身的属性。
+**LayoutParams**这个类在开发中还是很常见的，顾名思义就是布局参数，View中定义了一个LayoutParams类型的成员变量，它的作用就是确定View的宽高，我们平时在xml布局文件中指定的**layout_width**和**layout_height**属性就是用于生成LayoutParams。需要注意的是，这两个属性的前面都带上layout前缀，而不是直接使用**width**和**height**来命名，因此我们要清楚它们的值并不是View的宽高，也可以说它们并不属于View自身的属性。
 
 LayoutParams是ViewGroup中的一个内部类，我们看一下它的定义：
 
@@ -783,11 +846,11 @@ public static class LayoutParams {
     LayoutParams() {
     }
 
-    // 省略部分方法...
+    // ...
 }
 ```
 
-LayoutParams中定义了几个重载构造函数，分别用于xml文件中指定宽高、手动指定宽高等场景。每个ViewGroup的子类（直接或间接继承）都有对应的LayoutParams类，比如**LinearLayout.LayoutParams**，在各自的LayoutParams中可以定义相应的布局参数属性。因此不止**layout_width**和**layout_height**这两个属性，其他以layout开头的属性（比如**layout_weight**、**layout_margin**等等）也都和布局参数相关。
+LayoutParams中定义了几个重载构造函数，分别用于xml文件中指定宽高、手动指定宽高等场景。每个ViewGroup的子类（直接或间接继承）都有对应的LayoutParams类，比如**LinearLayout.LayoutParams**，在各自的LayoutParams中可以定义相应的布局参数属性。因此不止**layout_width**和**layout_height**这两个属性，其他以layout开头的属性（比如**layout_weight**、**layout_margin**等等）也都和LayoutParams相关。
 
 ##### 1.3.2.2.View的LayoutParams属性是何时设置的
 
@@ -795,20 +858,20 @@ LayoutParams中定义了几个重载构造函数，分别用于xml文件中指�
 
 * **xml文件中添加View**
 
-在此前的分析中我们知道xml文件中添加的View最终是通过**LayoutInflater**的`inflate()`方法来解析的。
+在`setContentView()`方法的分析中我们知道xml文件中添加的View最终是通过**LayoutInflater**的`inflate()`方法来解析的。
 
 ```java
 public View inflate(XmlPullParser parser, @Nullable ViewGroup root, boolean attachToRoot) {
     synchronized (mConstructorArgs) {
-        // 省略部分代码...
+        // ...
         View result = root;
         int type;
         while ((type = parser.next()) != XmlPullParser.START_TAG &&
                 type != XmlPullParser.END_DOCUMENT) {
         }
-        // 省略部分代码...
+        // ...
         final String name = parser.getName();
-        // 省略部分代码...
+        // ...
        
         final View temp = createViewFromTag(root, name, inflaterContext, attrs);
         ViewGroup.LayoutParams params = null;
@@ -830,7 +893,7 @@ public View inflate(XmlPullParser parser, @Nullable ViewGroup root, boolean atta
             result = temp;
         }
     }
-    // 省略部分代码...
+    // ...
     return result;
 }
 ```
@@ -843,10 +906,10 @@ public LayoutParams generateLayoutParams(AttributeSet attrs) {
 }
 ```
 
-构造出LayoutParams对象后根据参数`attachToRoot`的值有两种处理逻辑：
+构造出LayoutParams对象后根据参数**attachToRoot**的值有两种处理逻辑：
 
-1. 如果`attachToRoot`为true，则会调用`addView()`方法并传入构造好的LayoutParams对象，`addView()`方法内部会将LayoutParams对象设置给View，详细代码后面会展示，这里先这样记住就好。
-2. 如果`attachToRoot`为false，则会调用View的`setLayoutParams()`方法直接将构造好的LayoutParams对象设置给View。
+* 如果**attachToRoot**为true，则会调用`addView()`方法并传入构造好的LayoutParams对象，`addView()`方法内部会将LayoutParams对象设置给View，详细代码后面会展示，这里先这样记住就好
+* 如果**attachToRoot**为false，则会调用View的`setLayoutParams()`方法直接将构造好的LayoutParams对象设置给View
 
 ```java
 public void setLayoutParams(ViewGroup.LayoutParams params) {
@@ -930,10 +993,7 @@ public void addView(View child, int index, LayoutParams params) {
     if (child == null) {
         throw new IllegalArgumentException("Cannot add a null child view to a ViewGroup");
     }
-
-    // addViewInner() will call child.requestLayout() when setting the new LayoutParams
-    // therefore, we call requestLayout() on ourselves before, so that the child's request
-    // will be blocked at our level
+  
     requestLayout();
     invalidate(true);
     addViewInner(child, index, params, false);
@@ -957,8 +1017,7 @@ protected LayoutParams generateDefaultLayoutParams() {
 ```java
 private void addViewInner(View child, int index, LayoutParams params,
                           boolean preventRequestLayout) {
-
-    // 省略部分代码...
+    // ...
     if (!checkLayoutParams(params)) {
         params = generateLayoutParams(params);
     }
@@ -968,8 +1027,7 @@ private void addViewInner(View child, int index, LayoutParams params,
     } else {
         child.setLayoutParams(params);
     }
-
-    // 省略部分代码...
+    // ...
 }
 ```
 
@@ -1059,19 +1117,380 @@ final LayoutParams lp = (LayoutParams) child.getLayoutParams();
 
 #### 1.3.3.measure流程
 
+前面关于两个类的介绍还是比较详细的，现在终于进入到了measure流程的分析，这里会分为两种情况：单一View的measure和ViewGroup的measure，ViewGroup的measure要复杂一些，因为它不仅需要完成对自身的measure，还要完成对所有子View的measure，我们先分析简单的情况——单一View的measure流程。
+
 ##### 1.3.3.1.单一View的measure流程
 
+View的measure流程从`measure()`方法开始：
 
+```java
+public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
+    // ...
+    onMeasure(widthMeasureSpec, heightMeasureSpec);
+    // ...
+}
+```
+
+可以看到它是一个final声明的方法，因此子类无法重写该方法。在方法内部又调用了我们熟悉的`onMeasure`方法，我们自定义View时重写的都是该方法。
+
+```java
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec),
+            getDefaultSize(getSuggestedMinimumHeight(), heightMeasureSpec));
+}
+```
+
+方法内部调用了`setMeasuredDimension()`方法：
+
+```java
+protected final void setMeasuredDimension(int measuredWidth, int measuredHeight) {
+    // ...
+    setMeasuredDimensionRaw(measuredWidth, measuredHeight);
+}
+
+private void setMeasuredDimensionRaw(int measuredWidth, int measuredHeight) {
+    mMeasuredWidth = measuredWidth;
+    mMeasuredHeight = measuredHeight;
+	// ...
+}
+```
+
+可以看到`setMeasuredDimension()`方法完成的工作就是为mMeasuredWidth和mMeasuredHeight这两个变量赋值，这两个变量表示View的测量宽高（**与实际宽高有区别，View的实际宽高还取决于layout过程**），我们可以通过`getMeasuredWidth()`和`getMeasuredHeight()`方法获取到View测量后的宽高尺寸，即这两个变量的低30位。
+
+我们接着来看View的测量宽高是如何得到的，即`getDefaultSize()`方法：
+
+```java
+public static int getDefaultSize(int size, int measureSpec) {
+    int result = size;
+    int specMode = MeasureSpec.getMode(measureSpec);
+    int specSize = MeasureSpec.getSize(measureSpec);
+
+    switch (specMode) {
+        case MeasureSpec.UNSPECIFIED:
+            result = size;
+            break;
+        case MeasureSpec.AT_MOST:
+        case MeasureSpec.EXACTLY:
+            result = specSize;
+            break;
+    }
+    return result;
+}
+```
+
+可以看出当View的测量模式为**AT_MOST**或**EXACTLY**时，View的测量宽/高等于specSize，即MeasureSpec中的测量尺寸；当View的测量模式为**UNSPECIFIED**时，View的测量宽/高等于该方法的第一个参数的值，即`getSuggestedMinimumWidth()`/`getSuggestedMinimumHeight()`方法的返回值，这里就以`getSuggestedMinimumWidth()`方法为例，`getSuggestedMinimumHeight()`同理。
+
+```java
+protected int getSuggestedMinimumWidth() {
+    return (mBackground == null) ? mMinWidth : max(mMinWidth, mBackground.getMinimumWidth());
+}
+```
+
+这里首先判断了View是否设置了背景，如果没有设置背景，返回值为mMinWidth，它对应于**android:minWidth**属性所指定的值，如果没有指定则为0；如果View设置了背景，返回值为mMinWidth和`mBackground.getMinimumWidth()`两者的最大值，`getMinimumWidth()`方法可以获取到Drawable的原始宽度，但不是所有的Drawable都有原始宽度，如果没有原始宽度，获取到的值就为0（上面这段解释基本上来自《Android开发艺术探索》，目前我对于Drawable的认识还不够，想了解更多的话自行查阅资料吧）。
+
+这里也引出了一个问题，当View的测量模式为**AT_MOST**，即LayoutParams指定为wrap_content时，View的测量宽/高等于specSize，而从`getChildMeasureSpec()`方法的分析中我们也得出此时specSize的值为parentSize，即父View的可用空间大小，这会导致wrap_content产生和match_parent一样的效果，因此我们在自定义View时需要重写`onMeasure()`方法，解决wrap_content的失效问题，具体做法我后面会介绍。
+
+用一张图总结一下单一View的measure流程：
+
+![](C:\Users\zhukai\Desktop\View的measure流程.jpg)
 
 ##### 1.3.3.2.ViewGroup的measure流程
 
+ViewGroup的measure流程同样从`measure()`方法开始，和View是一样，这里就不展示了，之后会调用`onMeasure()`方法，但是我们会发现ViewGroup中并没有重写`onMeasure()`方法，原因其实也不难理解，就是因为每个ViewGroup的布局方式都不一样，无法得出一个统一的实现方式，在自定义ViewGroup时需要根据想要得到的布局效果来重写`onMeasure()`方法。虽然ViewGroup没有提供`onMeasure()`方法的实现方式，但是提供了一个`measureChildren()`方法，从方法名也能猜到是用来测量ViewGroup的所有子View的，我们来看一下这个方法。
 
+```java
+protected void measureChildren(int widthMeasureSpec, int heightMeasureSpec) {
+    final int size = mChildrenCount;
+    final View[] children = mChildren;
+    for (int i = 0; i < size; ++i) {
+        final View child = children[i];
+        if ((child.mViewFlags & VISIBILITY_MASK) != GONE) {
+            measureChild(child, widthMeasureSpec, heightMeasureSpec);
+        }
+    }
+}
+```
+
+方法内部遍历所有的子View，依次调用`measureChild()`方法：
+
+```java
+protected void measureChild(View child, int parentWidthMeasureSpec,
+                            int parentHeightMeasureSpec) {
+    final LayoutParams lp = child.getLayoutParams();
+
+    final int childWidthMeasureSpec = getChildMeasureSpec(parentWidthMeasureSpec,
+            mPaddingLeft + mPaddingRight, lp.width);
+    final int childHeightMeasureSpec = getChildMeasureSpec(parentHeightMeasureSpec,
+            mPaddingTop + mPaddingBottom, lp.height);
+
+    child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+}
+```
+
+`measureChild()`方法首先调用此前分析过的`getChildMeasureSpec()`方法，根据ViewGroup的MeasureSpec和子View自身的LayoutParams确定出子View的MeasureSpec，然后调用子View的`measure()`方法，对子View进行测量，后面的流程就和单一View的measure流程一样了。我们在自定义ViewGroup时可以在`onMeasure()`方法调用`measureChildren()`方法完成对子View的测量。
+
+下面以ViewGroup的子类LinearLayout为例，分析一下它的measure流程，加深一下对ViewGroup的measure流程的理解。首先来看`onMeasure()`方法：
+
+```java
+@Override
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    if (mOrientation == VERTICAL) {
+        measureVertical(widthMeasureSpec, heightMeasureSpec);
+    } else {
+        measureHorizontal(widthMeasureSpec, heightMeasureSpec);
+    }
+}
+```
+
+`onMeasure()`方法中会判断LinearLayout的布局方向执行相应的方法，这里就以竖直方向的`measureVertical()`为例进行分析，水平方向是类似的。
+
+```java
+void measureVertical(int widthMeasureSpec, int heightMeasureSpec) {
+    // 用于记录竖直方向的总高度
+    mTotalLength = 0;
+    // ...
+    float totalWeight = 0;
+    final int count = getVirtualChildCount();
+    // ...
+    for (int i = 0; i < count; ++i) {
+        final View child = getVirtualChildAt(i);
+        // ...
+        // 对子View进行measure
+        measureChildBeforeLayout(child, i, widthMeasureSpec, 0,
+                heightMeasureSpec, usedHeight);
+        // 获取子View测量后的高
+        final int childHeight = child.getMeasuredHeight();
+        // ...
+        final int totalLength = mTotalLength;
+        // 每测量一个子View，mTotalLength就会增加，增加的高度包括子View和高度和竖直方向上的margin
+        mTotalLength = Math.max(totalLength, totalLength + childHeight + lp.topMargin +
+                lp.bottomMargin + getNextLocationOffset(child));
+        // ...
+    }
+
+    // ...
+    // 计算竖直方向的padding
+    mTotalLength += mPaddingTop + mPaddingBottom;
+    int heightSize = mTotalLength;
+    heightSize = Math.max(heightSize, getSuggestedMinimumHeight());
+    // 完成自身高度的measure
+    int heightSizeAndState = resolveSizeAndState(heightSize, heightMeasureSpec, 0);
+    heightSize = heightSizeAndState & MEASURED_SIZE_MASK;
+    // ...
+    // 宽度的measure
+    maxWidth += mPaddingLeft + mPaddingRight;
+    maxWidth = Math.max(maxWidth, getSuggestedMinimumWidth());
+
+    setMeasuredDimension(resolveSizeAndState(maxWidth, widthMeasureSpec, childState),
+            heightSizeAndState);
+
+    // ...
+}
+```
+
+方法很长，我省略了大量代码，说一下简单的流程吧，高度上，LinearLayout首先会遍历所有子View，调用`measureChildBeforeLayout()`方法对子View进行测量，每测量一个子View，就增加mTotalLength的值，它表示LinearLayout在竖直方向上的总高度，增加的值包括子View的测量高度和子VIew竖直方向上的margin，当所有子View测量完成后，会计算LinearLayout自身的padding值，最后调用`resolveSizeAndState()`方法完成对自身高度的测量。宽度上和单一View的测量类似，不需要考虑子View，调用`resolveSizeAndState()`完成对自身宽度的测量。方法最后依然是调用`setMeasuredDimension()`设置LinearLayout的测量宽高。接下来我们来看一下LinearLayout测量自身的方法`resolveSizeAndState()`，这个方法是在View中定义的。
+
+```java
+public static int resolveSizeAndState(int size, int measureSpec, int childMeasuredState) {
+    final int specMode = MeasureSpec.getMode(measureSpec);
+    final int specSize = MeasureSpec.getSize(measureSpec);
+    final int result;
+    switch (specMode) {
+        case MeasureSpec.AT_MOST:
+            if (specSize < size) {
+              	// 子View的测量总高度超过了LinearLayout可用空间大小
+                result = specSize | MEASURED_STATE_TOO_SMALL;
+            } else {
+                result = size;
+            }
+            break;
+        case MeasureSpec.EXACTLY:
+            result = specSize;
+            break;
+        case MeasureSpec.UNSPECIFIED:
+        default:
+            result = size;
+    }
+    return result | (childMeasuredState & MEASURED_STATE_MASK);
+}
+```
+
+可以看出，如果LinearLayout的测量模式为**EXACTLY**，那么最终的测量高度为specSize，与子View无关；如果LinearLayout的测量模式为**AT_MOST**，会判断子View的总高度（包括margin、paddding）是否超过了LinearLayout竖直方向上的可用空间，如果没超过则最终测量高度为子View的总高度，如果超过了则最终测量高度为specSize，并设置一个**MEASURED_STATE_TOO_SMALL**标志。
+
+值得一提的是，LinearLayout的测量有一种特殊情况，就是对于自身的测量模式为**EXACTLY**并且子View设置了layout_weight的情况，这种情况会在后面重新进行一次子View的遍历和测量，由于这不是ViewGroup测量的通用流程，这里就不细说了，感兴趣的话可以查看一下这块的源码。
+
+最后用一张图总结一下ViewGroup的measure流程，虽然具体到每个ViewGroup的measure流程可能会有所不同，但是这几个步骤是通用的。
+
+![](C:\Users\zhukai\Desktop\ViewGroup的measure流程.jpg)
+
+既然ViewGroup和View的measure流程都已经分析完了，我们可以梳理一下一个页面的完整measure流程，首先从ViewRootImpl的`performMeasure()`方法开始对顶层View——DecorView进行测量，调用`measure()`方法，由于DecorView继承自FrameLayout，可以看做一个ViewGroup，因此接着会遍历DecorVIew的所有子View进行测量，如果子View是一个单一View，只需要完成自身的测量，如果子View是一个ViewGroup，就又会重复上面的步骤，遍历该子View下的所有子View进行测量，之后便是一个递归的过程，最后当所有子View的测量都完成后，再进行DecorVIew自身的测量。
 
 #### 1.3.4.补充介绍
 
 ##### 1.3.4.1.MeasureSpec.UNSPECIFIED的应用
 
+我们此前介绍**UNSPECIFIED**模式的时候基本上是一笔带过的，只介绍了该模式下是父View不限制子View大小，用于系统内部，开发中一般很少会用到，虽然是这样，我们还是有必要了解一下该模式的常见应用场景，可能我们平时在开发中已经接触过了，只是没有发现而已。
 
+ScrollView相信大家都很熟悉了，在使用时有一个需要注意的地方，就是当ScrollView的子布局没有占满屏幕高度时，它的子View是无法占满全屏的，即使设置了layout_height为**match_parent**也不管用，可能大家都已经知道了这个问题，我这里就简单展示一下。布局文件很简单，ScrollView嵌套一个LinearLayout，LinearLayout中有一个高度为100dp的TextView。
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#f00"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:text="I can do all things"
+            android:textColor="#fff"
+            android:textSize="24sp" />
+      
+    </LinearLayout>
+  
+</ScrollView>
+```
+
+运行效果如下：
+
+![](http://tva1.sinaimg.cn/large/007X8olVly1g6jsh0fgewj305k0c1aa9.jpg)
+
+可以看出LinearLayout的高度为100dp，并没有占满屏幕，但是我们明明设置了layout_height为**match_parent**，其实不止这样，即便是layout_height指定了精确数值（如200dp）也不会生效。解决方案就是为ScrollView添加**android:fillViewport="true"**属性，运行之后发现LinearLayout可以占满全屏了。
+
+![](http://tva1.sinaimg.cn/large/007X8olVly1g6jsimk9nnj305k0c1glr.jpg)
+
+现在我们从源码角度分析一下产生这个问题的原因，看一下ScrollView的`onMeasure()`方法：
+
+**ScrollView的onMeasure方法**
+
+```java
+@Override
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+    if (!mFillViewport) {
+        return;
+    }
+
+    final int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+    if (heightMode == MeasureSpec.UNSPECIFIED) {
+        return;
+    }
+
+    if (getChildCount() > 0) {
+        final View child = getChildAt(0);
+        final int widthPadding;
+        final int heightPadding;
+        final int targetSdkVersion = getContext().getApplicationInfo().targetSdkVersion;
+        final FrameLayout.LayoutParams lp = (LayoutParams) child.getLayoutParams();
+        if (targetSdkVersion >= VERSION_CODES.M) {
+            widthPadding = mPaddingLeft + mPaddingRight + lp.leftMargin + lp.rightMargin;
+            heightPadding = mPaddingTop + mPaddingBottom + lp.topMargin + lp.bottomMargin;
+        } else {
+            widthPadding = mPaddingLeft + mPaddingRight;
+            heightPadding = mPaddingTop + mPaddingBottom;
+        }
+
+        final int desiredHeight = getMeasuredHeight() - heightPadding;
+        if (child.getMeasuredHeight() < desiredHeight) {
+            final int childWidthMeasureSpec = getChildMeasureSpec(
+                    widthMeasureSpec, widthPadding, lp.width);
+            final int childHeightMeasureSpec = MeasureSpec.makeMeasureSpec(
+                    desiredHeight, MeasureSpec.EXACTLY);
+            child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+        }
+    }
+}
+```
+
+`onMeasure()`方法中首先会判断mFillViewport的值，如果为false则直接return，不执行后面的逻辑。从变量名不难猜到这个mFillViewport就是对应于**android:fillViewport**属性，默认值为false，因此当我们没有设置**android:fillViewport="true"**时，`onMeasure()`方法只会执行父类的`onMeasure()`方法。我们先简单看一下后面的代码，首先计算出ScrollView的可用高度desiredHeight，当`child.getMeasuredHeight() < desiredHeight`，即子View的测量高度小于ScrollView的可用高度时，会将子View高度的测量模式指定为**EXACTLY**，测量尺寸指定为ScrollView的可用高度并进行重新测量，因此子View的最终测量高度就是ScrollView的可用高度，对于上面的例子来说Linearlayout自然就占满了全屏。
+
+清楚了**android:fillViewport="true"**属性为什么可以让子View占满全屏后，我们再来分析一下为什么默认情况下子View不会占满全屏，由于默认情况只会执行父类的`onMeasure()`方法，我们来看一下ScrollView的父类FrameLayout的`onMeasure()`方法。
+
+**FrameLayout的onMeasure方法**
+
+```java
+@Override
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    int count = getChildCount();
+    // ...
+
+    for (int i = 0; i < count; i++) {
+        final View child = getChildAt(i);
+        // ...
+        measureChildWithMargins(child, widthMeasureSpec, 0, heightMeasureSpec, 0);
+        // ...
+    }
+    // ...
+    setMeasuredDimension(resolveSizeAndState(maxWidth, widthMeasureSpec, childState),
+            resolveSizeAndState(maxHeight, heightMeasureSpec,
+                    childState << MEASURED_HEIGHT_STATE_SHIFT));
+    // ...
+}
+```
+
+FrameLayout的`onMeasure()`方法内部调用了`measureChildWithMargins()`方法来对子View进行测量，ScrollView重写了该方法，我们来看一下：
+
+**ScrollView的measureChildWithMargins方法**
+
+```java
+@Override
+protected void measureChildWithMargins(View child, int parentWidthMeasureSpec, int widthUsed,
+                                       int parentHeightMeasureSpec, int heightUsed) {
+    final MarginLayoutParams lp = (MarginLayoutParams) child.getLayoutParams();
+
+    final int childWidthMeasureSpec = getChildMeasureSpec(parentWidthMeasureSpec,
+            mPaddingLeft + mPaddingRight + lp.leftMargin + lp.rightMargin
+                    + widthUsed, lp.width);
+    final int usedTotal = mPaddingTop + mPaddingBottom + lp.topMargin + lp.bottomMargin +
+            heightUsed;
+    final int childHeightMeasureSpec = MeasureSpec.makeSafeMeasureSpec(
+            Math.max(0, MeasureSpec.getSize(parentHeightMeasureSpec) - usedTotal),
+            MeasureSpec.UNSPECIFIED);
+
+    child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+}
+```
+
+可以看出ScrollView在测量子View时，将子VIew高度的测量模式直接指定为了**UNSPECIFIED**，还记得我们上面分析过的LinearLayout的measure过程吗，在子View测量完成后，会调用`resolveSizeAndState()`方法完成自身的测量，这里再贴一遍代码。
+
+```java
+public static int resolveSizeAndState(int size, int measureSpec, int childMeasuredState) {
+    final int specMode = MeasureSpec.getMode(measureSpec);
+    final int specSize = MeasureSpec.getSize(measureSpec);
+    final int result;
+    switch (specMode) {
+        case MeasureSpec.AT_MOST:
+            if (specSize < size) {
+              	// 子View的测量总高度超过了LinearLayout可用空间大小
+                result = specSize | MEASURED_STATE_TOO_SMALL;
+            } else {
+                result = size;
+            }
+            break;
+        case MeasureSpec.EXACTLY:
+            result = specSize;
+            break;
+        case MeasureSpec.UNSPECIFIED:
+        default:
+            result = size;
+    }
+    return result | (childMeasuredState & MEASURED_STATE_MASK);
+}
+```
+
+可以看出，当LinearLayout的测量模式为**UNSPECIFIED**时，LinearLayout的测量高度为子View的总高度size，因此当LinearLayout子View的总高度小于LinearLayout指定的高度时，LinearLayout的高度不会生效。
+
+看到这里我们清楚了ScrollView子View无法占满全屏的原因，也见到了**UNSPECIFIED**的应用场景，其实不止ScrollView，**UNSPECIFIED**模式在其他的一些可滚动的ViewGroup中也有应用，比如RecyclerView。和**WRAP_CONTENT**相比，**UNSPECIFIED**模式不会限制View的大小，正是如此，**UNSPECIFIED**模式非常适合应用到可滚动的ViewGroup中，此时ViewGroup不必关心子View的大小是否超出了自身范围，即时超出了也可以通过滚动来查看。
+
+我们在自定义View时该如何处理**UNSPECIFIED**的情况呢，这里引用一下[每日一问 详细的描述下自定义 View 测量时 MesureSpec.UNSPECIFIED](https://www.wanandroid.com/wenda/show/8613)中陈小缘大佬的回答，解释得很好。当遇到**UNSPECIFIED**时就比较自由了，既然尺寸由自己决定，那么可以写死为50，也可以固定为200，但还是建议结合实际需求来定义，比如ImageView，它的做法就是：有设置图片内容(drawable)的话，会直接使用这个drawable的尺寸，但不会超过指定的MaxWidth或MaxHeight， 没有内容的话就是0；而TextView处理**UNSPECIFIED**的方式，和**AT_MOST**是一样的。
 
 ### 1.4.layout
 
