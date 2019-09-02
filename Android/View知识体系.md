@@ -1494,7 +1494,215 @@ public static int resolveSizeAndState(int size, int measureSpec, int childMeasur
 
 ### 1.4.layout
 
+measure流程的作用是对View的大小进行测量，而layout的作用就是根据测量大小确定View的最终位置，简单地说就是把View放在哪。和measure流程类似，layout流程同样分为两种情况：单一View的layout和ViewGroup的layout，ViewGroup的layout流程要复杂一些，因为它不仅要进行自身的layout，还要对所有子View进行layout，我们先来看看单一View的layout流程。
 
+#### 1.4.1.单一View的layout流程
+
+View的layout流程从`layout()`方法开始，我们来看一下这个方法：
+
+```java
+public void layout(int l, int t, int r, int b) {
+    // ...
+    int oldL = mLeft;
+    int oldT = mTop;
+    int oldB = mBottom;
+    int oldR = mRight;
+
+    boolean changed = isLayoutModeOptical(mParent) ?
+            setOpticalFrame(l, t, r, b) : setFrame(l, t, r, b);
+
+    if (changed || (mPrivateFlags & PFLAG_LAYOUT_REQUIRED) == PFLAG_LAYOUT_REQUIRED) {
+        onLayout(changed, l, t, r, b);
+        // ...
+    }
+    // ...
+}
+```
+
+`layout()`方法内部会根据`isLayoutModeOptical()`的返回值调用`setOpticalFrame()`方法或`setFrame()`方法，`isLayoutModeOptical()`方法会判断**LAYOUT_MODE_OPTICAL_BOUNDS**标志位，它表示一个布局模式，从名称上看应该是和布局边界有关，具体作用我也不是很了解，不过默认情况下都是没有设置该标志位的。这里可以暂且先不去管它的作用，我们会发现`setOpticalFrame()`方法内部最终还是会调用`setFrame()`方法，因此直接来看`setFrame()`方法就可以了。
+
+```java
+private boolean setOpticalFrame(int left, int top, int right, int bottom) {
+    Insets parentInsets = mParent instanceof View ?
+            ((View) mParent).getOpticalInsets() : Insets.NONE;
+    Insets childInsets = getOpticalInsets();
+    return setFrame(
+            left   + parentInsets.left - childInsets.left,
+            top    + parentInsets.top  - childInsets.top,
+            right  + parentInsets.left + childInsets.right,
+            bottom + parentInsets.top  + childInsets.bottom);
+}
+
+protected boolean setFrame(int left, int top, int right, int bottom) {
+    boolean changed = false;
+
+    // ...
+    if (mLeft != left || mRight != right || mTop != top || mBottom != bottom) {
+        changed = true;
+        // ...
+        mLeft = left;
+        mTop = top;
+        mRight = right;
+        mBottom = bottom;
+        // ...
+    }
+    return changed;
+}
+```
+
+`setFrame()`方法首先会判断根据`mLeft != left || mRight != right || mTop != top || mBottom != bottom`，即View的位置是否发生了改变，如果发生了改变，则返回值为true，反之返回值为false。如果View的位置发生了改变，会重新为View的四个顶点位置赋值，对应四个成员变量mLeft、mTop、mRight和mBottom，关于这四个值我们通过一个示意图就可以很清楚了，图片摘自[GcsSloop大佬的博客](https://www.gcssloop.com/#blog)。
+
+![](http://gcsblog.oss-cn-shanghai.aliyuncs.com/blog/2019-04-29-071021.jpg?gcssloop)
+
+首次layout 前这四个变量都没有赋过值，因此这里`setFrame()`方法会返回true，我们回到`layout()`方法，changed的值就为true，接下来会执行`onLayout()`方法，我们接着来看`onLayout()`方法。
+
+```java
+protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+}
+```
+
+View中的`onLayout()`是一个空方法，没有声明任何逻辑，这是因为`layout()`方法已经确定了View的四个顶点的位置，而`onLayout()`方法是用于ViewGroup确定子View的位置，我们会再来分析。
+
+单一View的layout流程就分析完了，是不是很简单，用一张流程图总结一下：
+
+![](C:\Users\zhukai\Desktop\View的layout流程.jpg)
+
+#### 1.4.2.ViewGroup的layout流程
+
+ViewGroup的layout流程同样从`layout()`方法开始，我们来看一下：
+
+```java
+@Override
+public final void layout(int l, int t, int r, int b) {
+  	// ...
+  	super.layout(l, t, r, b);
+  	// ...
+}
+```
+
+ViewGroup的`layout()`方法使用final声明，因此子类无法重写该方法。`layout()`方法中调用了父类即View的`layout()`方法，确定了ViewGroup自身的四个顶点位置，并调用`onLayout()`方法，我们来看一下ViewGroup的`onLayout()`方法：
+
+```java
+@Override
+protected abstract void onLayout(boolean changed, int l, int t, int r, int b);
+```
+
+可以发现ViewGroup的`onLayout()`方法是一个抽象方法，因此当我们自定义ViewGroup时需要重写该方法。ViewGroup没有实现`onLayout()`方法的原因同样是因为不同的ViewGroup具有不同的布局方式，无法得出一个统一实现。在自定义ViewGroup中的`onLayout()`方法中我们需要遍历所有的子View，根据需要的布局方式调用子View的`layout()`方法确定子View的位置。
+
+这样说可能不是很清楚，接下来我们同样以LinearLayout为例，看一下它的layout流程，加深我们对ViewGroup的 layout流程的理解。由于ViewGroup的`layout()`方法无法被子类重写，因此我们直接来看LinearLayout的`onLayout()`方法：
+
+```java
+@Override
+protected void onLayout(boolean changed, int l, int t, int r, int b) {
+    if (mOrientation == VERTICAL) {
+        layoutVertical(l, t, r, b);
+    } else {
+        layoutHorizontal(l, t, r, b);
+    }
+}
+```
+
+和LinearLayout的`onMeasure()`方法类似，`onlayout()`方法中同样会根据LinearLayout的布局方向执行相应的布局方法，我们以竖直方向布局为例，分析一下`layoutVertical()`方法，水平方向同理。
+
+```java
+void layoutVertical(int left, int top, int right, int bottom) {
+    // ...
+  	// childTop和childLeft记录子View的左上位置
+    int childTop;
+  	int childLeft;
+    // ...
+    final int count = getVirtualChildCount();
+    // ...
+    for (int i = 0; i < count; i++) {
+        final View child = getVirtualChildAt(i);
+        // ...
+        final int childWidth = child.getMeasuredWidth();
+        final int childHeight = child.getMeasuredHeight();
+
+        final LinearLayout.LayoutParams lp =
+                (LinearLayout.LayoutParams) child.getLayoutParams();
+        // ...
+
+        childTop += lp.topMargin;
+        setChildFrame(child, childLeft, childTop + getLocationOffset(child),
+                childWidth, childHeight);
+      	// 每完成一个子View的layout，childTop就会增加
+        childTop += childHeight + lp.bottomMargin + getNextLocationOffset(child);
+
+        i += getChildrenSkipCount(child, i);
+    }
+}
+```
+
+`layoutVertical()`方法内部遍历了LinearLayout的所有子View，每次遍历都调用`setChildFrame()`方法，我们来看一下这个方法：
+
+```java
+private void setChildFrame(View child, int left, int top, int width, int height) {
+    child.layout(left, top, left + width, top + height);
+}
+```
+
+可以看到`setChildFrame()`方法其实就是调用了子View的`layout()`方法，完成子View的布局。`setChildFrame()`方法调用完成后，会增加childTop的值，它对应子View的mTop，继续下一个子View的layout，还是比较好理解的，竖直方向的LinearLayout的子View是一个接一个往下放置的。
+
+总结一下ViewGroup的layout流程，首先会调用`layout()`方法确定自身的位置，之后调用`onLayout()`方法，遍历所有的子View，根据ViewGroup的布局特性依次确定出每个子View的位置。流程图如下所示：
+
+![](C:\Users\zhukai\Desktop\ViewGroup的layout流程.jpg)
+
+ViewGroup的layout流程和measure流程还是很相似的，不过在顺序上有一些区别，measure是先遍历子View对子View进行测量，最后根据子View的测量结果对ViewGroup自身进行测量；而layout是先确定ViewGroup的位置，再遍历子View确定子View的位置。
+
+最后我们来梳理一下整个页面的layout过程，前面也提到过，页面的layout流程从ViewRootImpl的`performLayout()`方法开始。
+
+**ViewRootImpl的performLayout方法**
+
+```java
+private void performLayout(WindowManager.LayoutParams lp, int desiredWindowWidth,
+                           int desiredWindowHeight) {
+    // ...
+    final View host = mView;
+    // ...
+    host.layout(0, 0, host.getMeasuredWidth(), host.getMeasuredHeight());
+    // ...
+}
+```
+
+方法内部首先将mView赋值给host，这里的mView我此前也提到过，就是在`handleResumeActivity()`方法中调用`wm.addView(decor,l)`时传过来的DecorView，因此后面调用host的`layout()`方法实际上就是调用DecorView的`layout()`方法，从这里就开始最顶层VIew的layout，而我们知道DecorView继承自FrameLayout，因此这里就是执行ViewGroup的`layout()`方法，之后的步骤我们就清楚了，首先确定出DecorView的位置，然后调用`onlayout()`方法遍历DecorView的子View，依次调用子View的`layout()`方法来确定子View的位置，如果子View是一个ViewGroup，还需要接着遍历子View的所有子View进行layout。
+
+#### 1.4.3.getMeasureWidth/getMeasureHeight和getWidth/getHeight的区别
+
+我在View的measure流程中提到过measure完成后可以通过`getMeasuredWidth()`和`getMeasuredHeight()`方法获取View的测量宽高，但是这个测量宽高并不等于View的最终实际宽高，现在就来解释一下这个问题。
+
+我们知道View的宽高可以通过`getWidth()`和`getHeight()`方法来获得，首先来看一下这几个方法的定义，这里就只对比`getMeasureWidth()`和`getWidth()`方法，`getMeasuredHeight()`方法和`getHeight()`方法的区别同理。
+
+```java
+public final int getMeasuredWidth() {
+    return mMeasuredWidth & MEASURED_SIZE_MASK;
+}
+
+public final int getMeasuredHeight() {
+    return mMeasuredHeight & MEASURED_SIZE_MASK;
+}
+
+public final int getWidth() {
+    return mRight - mLeft;
+}
+
+public final int getHeight() {
+    return mBottom - mTop;
+}
+```
+
+`getMeasuredWidth()`获取到是mMeasuredWidth的低30位，而mMeasuredWidth是在`onMeasure()`方法中通过`setMeasuredDimension()`赋值的。`getWidth()`获取到的是`mRight - mLeft`，这两个都是在`layout()`方法中通过`setFrame()`赋值的。这样看上去两者获取到的值好像没有什么联系，我们可以再回头看一下`layout()`方法传入的left和right参数的值，就以刚介绍过的DecorView为例吧，left参数传入了0，right参数传入了`host.getMeasuredWidth()`，因此最后计算出的`mRight - mLeft`就是`getMeasureWidth()`方法的返回值。其实不止DecorView，所有的View**在默认情况下`getWidth()`的值和`getMeasureWidth()`的值都是一样**的，需要注意这里强调的是**默认情况下**，那么什么情况下这两个方法的返回值不一样呢？
+
+我们可以重写View的`layout()`方法，就像下面这样：
+
+```java
+@Override
+public void layout(int l, int t, int r, int b) {
+    super.layout(l, t, r + 100, b + 100);
+}
+```
+
+这样就会导致`getWidth()`/`getHeight()`获取到的值比`getMeasureWidth()`/`getMeasureHeight()`获取到的值大100px，虽然一般情况下不会这样做，只是为了让我们更加清楚`getWidth()`/`getHeight()`和`getMeasureWidth()`/`getMeasureHeight()`的区别。
 
 ### 1.5.draw
 
