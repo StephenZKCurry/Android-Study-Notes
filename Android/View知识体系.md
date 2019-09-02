@@ -1192,7 +1192,7 @@ protected int getSuggestedMinimumWidth() {
 
 用一张图总结一下单一View的measure流程：
 
-![](C:\Users\zhukai\Desktop\View的measure流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/View%E7%9A%84measure%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 ##### 1.3.3.2.ViewGroup的measure流程
 
@@ -1321,7 +1321,7 @@ public static int resolveSizeAndState(int size, int measureSpec, int childMeasur
 
 最后用一张图总结一下ViewGroup的measure流程，虽然具体到每个ViewGroup的measure流程可能会有所不同，但是这几个步骤是通用的。
 
-![](C:\Users\zhukai\Desktop\ViewGroup的measure流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/ViewGroup%E7%9A%84measure%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 既然ViewGroup和View的measure流程都已经分析完了，我们可以梳理一下一个页面的完整measure流程，首先从ViewRootImpl的`performMeasure()`方法开始对顶层View——DecorView进行测量，调用`measure()`方法，由于DecorView继承自FrameLayout，可以看做一个ViewGroup，因此接着会遍历DecorVIew的所有子View进行测量，如果子View是一个单一View，只需要完成自身的测量，如果子View是一个ViewGroup，就又会重复上面的步骤，遍历该子View下的所有子View进行测量，之后便是一个递归的过程，最后当所有子View的测量都完成后，再进行DecorVIew自身的测量。
 
@@ -1565,7 +1565,7 @@ View中的`onLayout()`是一个空方法，没有声明任何逻辑，这是因�
 
 单一View的layout流程就分析完了，是不是很简单，用一张流程图总结一下：
 
-![](C:\Users\zhukai\Desktop\View的layout流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/View%E7%9A%84layout%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 #### 1.4.2.ViewGroup的layout流程
 
@@ -1646,7 +1646,7 @@ private void setChildFrame(View child, int left, int top, int width, int height)
 
 总结一下ViewGroup的layout流程，首先会调用`layout()`方法确定自身的位置，之后调用`onLayout()`方法，遍历所有的子View，根据ViewGroup的布局特性依次确定出每个子View的位置。流程图如下所示：
 
-![](C:\Users\zhukai\Desktop\ViewGroup的layout流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/ViewGroup%E7%9A%84layout%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 ViewGroup的layout流程和measure流程还是很相似的，不过在顺序上有一些区别，measure是先遍历子View对子View进行测量，最后根据子View的测量结果对ViewGroup自身进行测量；而layout是先确定ViewGroup的位置，再遍历子View确定子View的位置。
 
