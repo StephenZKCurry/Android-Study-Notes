@@ -1192,7 +1192,7 @@ protected int getSuggestedMinimumWidth() {
 
 用一张图总结一下单一View的measure流程：
 
-![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/View%E7%9A%84measure%E6%B5%81%E7%A8%8B.jpg?raw=true)
+![](C:\Users\zhukai\Desktop\View的measure流程.jpg)
 
 ##### 1.3.3.2.ViewGroup的measure流程
 
@@ -1706,11 +1706,365 @@ public void layout(int l, int t, int r, int b) {
 
 ### 1.5.draw
 
+通过前面的measure和layout两个流程，已经确定出了View的大小和位置，接下里就要把View显示出来了，draw的作用是就将View绘制到屏幕上。相比于前两个流程，View的绘制流程是最简单的，因为源码的逻辑很少，基本上都要靠我们自己去定义如何绘制。同样地，我们依然分两种情况进行分析，包括单一View的绘制和ViewGroup的绘制。
 
+#### 1.5.1.单一View的draw流程
+
+View的绘制流程从`draw()`方法开始，我们来看一下这个方法：
+
+```java
+public void draw(Canvas canvas) {
+    // ...
+    if (!dirtyOpaque) {
+        // 第一步、绘制背景
+        drawBackground(canvas);
+    }
+    // ...
+    if (!verticalEdges && !horizontalEdges) {
+        // 第二步、绘制自身内容
+        if (!dirtyOpaque) onDraw(canvas);
+        // 第三步、绘制子View
+        dispatchDraw(canvas);
+        // ...
+        // 第四布、绘制装饰，包括滚动条和前景
+        onDrawForeground(canvas);
+        // ...
+        return;
+    }
+    // ...
+}
+```
+
+这里精简了一下源码，可以直观地看出View的`draw()`方法分为四个步骤（源码中提到了6个步骤，另外两个可以跳过的，这里就不列入了）：
+
+* 调用`drawBackground()`方法绘制背景
+* 调用`onDraw()`方法绘制自身内容
+* 调用`dispatchDraw()`方法绘制子View
+* 调用`onDrawForeground()`方法绘制装饰，包括滚动条和前景
+
+下面我们就来分别看一下这四个方法。
+
+**View的drawBackground方法**
+
+```java
+private void drawBackground(Canvas canvas) {
+    // 获取背景Drawable
+    final Drawable background = mBackground;
+    if (background == null) {
+        return;
+    }
+    // 根据layout流程确定出的四个顶点位置设置背景的边界
+    setBackgroundBounds();
+
+    // ...
+
+    // 获取水平和竖直方向上的滑动距离
+    final int scrollX = mScrollX;
+    final int scrollY = mScrollY;
+    // 绘制背景
+    if ((scrollX | scrollY) == 0) {
+        background.draw(canvas);
+    } else {
+        canvas.translate(scrollX, scrollY);
+        background.draw(canvas);
+        canvas.translate(-scrollX, -scrollY);
+    }
+}
+```
+
+`drawBackground()`方法首先会获取背景Drawable，如果没有设置背景则直接返回；如果设置了背景就调用Drawable的`draw()`方法完成背景的绘制，代码的逻辑还是比较简单的，我就不详细说了。
+
+**View的onDraw方法**
+
+```
+protected void onDraw(Canvas canvas) {
+}
+```
+
+`onDraw()`方法可以说是我们在自定义View中最熟悉的，View的`onDraw()`是一个空方法，需要子类自己决定如何进行绘制。
+
+**View的dispatchDraw方法**
+
+```java
+protected void dispatchDraw(Canvas canvas) {
+
+}
+```
+
+View的`dispatchDraw()`方法同样是一个空方法，它的作用是对子View进行绘制，因此单一View自然无需实现该方法，我们稍后会看一下ViewGroup中是如何实现该方法的。
+
+**View的onDrawForeground方法**
+
+```java
+public void onDrawForeground(Canvas canvas) {
+    // 绘制滚动条
+  	onDrawScrollIndicators(canvas);
+    onDrawScrollBars(canvas);
+
+  	// 绘制前景
+    final Drawable foreground = mForegroundInfo != null ? mForegroundInfo.mDrawable : null;
+    if (foreground != null) {
+        if (mForegroundInfo.mBoundsChanged) {
+            mForegroundInfo.mBoundsChanged = false;
+            final Rect selfBounds = mForegroundInfo.mSelfBounds;
+            final Rect overlayBounds = mForegroundInfo.mOverlayBounds;
+
+            if (mForegroundInfo.mInsidePadding) {
+                selfBounds.set(0, 0, getWidth(), getHeight());
+            } else {
+                selfBounds.set(getPaddingLeft(), getPaddingTop(),
+                        getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
+            }
+
+            final int ld = getLayoutDirection();
+            Gravity.apply(mForegroundInfo.mGravity, foreground.getIntrinsicWidth(),
+                    foreground.getIntrinsicHeight(), selfBounds, overlayBounds, ld);
+            foreground.setBounds(overlayBounds);
+        }
+
+        foreground.draw(canvas);
+    }
+}
+```
+
+`onDrawForeground()`方法用于绘制View的一些装饰，包括滚动条和前景，我们一般很少接触到该方法，就不具体分析了。
+
+用一张流程图总结一下单一View的draw流程：
+
+![](C:\Users\zhukai\Desktop\View的draw流程.jpg)
+
+虽然View的绘制流程可以分为以上四步，但是我们在自定义View中只需要重写`onDraw()`方法，按需要进行绘制就可以了。
+
+#### 1.5.2.ViewGroup的draw流程
+
+ViewGroup的绘制同样从`draw()`方法开始，也可分为和View相同的四个步骤，这里要重点分析一下第三步调用的`dispatchDraw()`方法，ViewGroup重写了该方法。其他三个步骤和View是一样的，这里就不再分析了。
+
+```java
+@Override
+protected void dispatchDraw(Canvas canvas) {
+    // ...
+    final int childrenCount = mChildrenCount;
+    final View[] children = mChildren;
+    // ...
+    // 遍历子View
+    for (int i = 0; i < childrenCount; i++) {
+        // ...
+        final View transientChild = mTransientViews.get(transientIndex);
+        if ((transientChild.mViewFlags & VISIBILITY_MASK) == VISIBLE ||
+                transientChild.getAnimation() != null) {
+            // 绘制子View
+            more |= drawChild(canvas, transientChild, drawingTime);
+        }
+        transientIndex++;
+        if (transientIndex >= transientCount) {
+            transientIndex = -1;
+        }
+        // ...
+    }
+    // ...
+}
+
+protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+    return child.draw(canvas, this, drawingTime);
+}
+```
+
+`dispatchDraw()`方法内部主要做的就是遍历所有的子View，依次调用`drawChild`方法，`drawChild`方法内部又会调用子View的`draw()`方法，注意，这里调用的`draw()`方法并不是此前分析过的那个，它有三个参数。
+
+```java
+boolean draw(Canvas canvas, ViewGroup parent, long drawingTime) {
+    // ...
+    if ((mPrivateFlags & PFLAG_SKIP_DRAW) == PFLAG_SKIP_DRAW) {
+    	mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+    	dispatchDraw(canvas);
+	} else {
+    	draw(canvas);
+	}
+    // ...
+    return more;
+}
+```
+
+这里省略了大量代码，可以看出该方法内部会根据条件执行一个参数的`draw()`方法（执行的条件我后面会分析），后面的流程就和单一View的绘制流程相同了。
+
+总结一下ViewGroup的draw流程，整体步骤和单一View的draw流程是一样的，不同的是ViewGroup重写了`dispatchDraw()`方法，在内部遍历子View并完成子View的绘制。
+
+![](C:\Users\zhukai\Desktop\ViewGroup的draw流程.jpg)
+
+最后还是来梳理一下整个页面的draw流程，从ViewRootImpl的`performDraw()`方法开始：
+
+```java
+private void performDraw() {
+    // ...
+    boolean canUseAsync = draw(fullRedrawNeeded);
+    // ...
+}
+
+private boolean draw(boolean fullRedrawNeeded) {
+    // ...
+    if (!drawSoftware(surface, mAttachInfo, xOffset, yOffset,
+            scalingRequired, dirty, surfaceInsets)) {
+        return false;
+    }
+    // ...
+    return useAsyncReport;
+}
+
+private boolean drawSoftware(Surface surface, AttachInfo attachInfo, int xoff, int yoff,
+                             boolean scalingRequired, Rect dirty, Rect surfaceInsets) {
+    // ...
+    mView.draw(canvas);
+    return true;
+}
+```
+
+可以看出经过一些列调用最后会执行mView的`draw()`方法，这里的mView是DecorView，前面已经分析过了，因此现在进入了DecorView的绘制流程，接下来会遍历DecorView的所有子View，完成子View的绘制，如果子View是一个ViewGroup则重复该过程，直到所有的子View都绘制完成。
+
+#### 1.5.3.ViewGroup的draw()方法调用问题
+
+首先介绍几个Android中常见的位运算，有助于我们更好地理解源码：
+
+> **a | b**：为a添加标志位b
+>
+> **(a & b) != 0**：判断a是否有标志位b
+>
+> **a & ~b**：为a清除标志位b
+>
+> **a^b**：取出a与b的不同部分
+
+感叹一下，位运算在Android中还是很常见的，尤其是在View的源码中，刚开始看的时候非常痛苦，不过熟悉了上面这几个后就会容易多了。
+
+下面进入正题，当我们的自定义View继承自ViewGroup时会遇到一个问题，默认情况下`draw()`方法和`onDraw()`方法都不会被调用，只会调用了`dispatchDraw()`方法，可以自己尝试一下，我这里就不展示了。我们下面就来分析一下原因，首先来看上面分析过的三个参数的`draw()`方法：
+
+```java
+boolean draw(Canvas canvas, ViewGroup parent, long drawingTime) {
+    // ...
+    if ((mPrivateFlags & PFLAG_SKIP_DRAW) == PFLAG_SKIP_DRAW) {
+    	mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+    	dispatchDraw(canvas);
+	} else {
+    	draw(canvas);
+	}
+    // ...
+    return more;
+}
+```
+
+这个方法是在父View遍历子VIew依次调用`drawChild()`方法后被调用的，可以很明显地看出当满足`(mPrivateFlags & PFLAG_SKIP_DRAW) == PFLAG_SKIP_DRAW`条件时，执行`dispatchDraw(canvas)`方法，不满足条件就执行一个参数的`draw()`方法，进而执行`onDraw()`方法。**mPrivateFlags**是View中定义的一个全局变量，用于存储各种标志位，上面的条件就是判断mPrivateFlags是否设置了**PFLAG_SKIP_DRAW**标志位。既然ViewGroup默认情况下不会执行`draw()`方法，那么肯定是设置了**PFLAG_SKIP_DRAW**标志位，是在什么时候设置的呢？我们发现在ViewGroup的构造方法中调用了`initViewGroup()`方法：
+
+```java
+public ViewGroup(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    super(context, attrs, defStyleAttr, defStyleRes);
+
+    initViewGroup();
+    initFromAttributes(context, attrs, defStyleAttr, defStyleRes);
+}
+```
+
+接着来看`initViewGroup()`方法：
+
+```java
+private void initViewGroup() {
+    // ViewGroup doesn't draw by default
+    if (!debugDraw()) {
+        setFlags(WILL_NOT_DRAW, DRAW_MASK);
+    }
+    // ...
+}
+```
+
+从注释**ViewGroup doesn't draw by default**中也能看出ViewGroup默认情况下的确不会调用`draw()`方法，在`initViewGroup()`方法内部执行了`setFlags(WILL_NOT_DRAW, DRAW_MASK)`，从方法名可以看出是设置了一个标志位，我们接下来看一下`setFlags()`方法：
+
+```java
+void setFlags(int flags, int mask) {
+    // ...
+    int old = mViewFlags;
+    // 设置标志位
+    mViewFlags = (mViewFlags & ~mask) | (flags & mask);
+    // 判断标志位是否改变
+    int changed = mViewFlags ^ old;
+    if (changed == 0) {
+        return;
+    }
+    int privateFlags = mPrivateFlags;
+    // ...
+    if ((changed & DRAW_MASK) != 0) {
+        // 设置了DRAW_MASK模式的标志位
+        if ((mViewFlags & WILL_NOT_DRAW) != 0) {
+            // 设置了WILL_NOT_DRAW标志位
+            if (mBackground != null
+                    || mDefaultFocusHighlight != null
+                    || (mForegroundInfo != null && mForegroundInfo.mDrawable != null)) {
+                // 如果设置了背景、焦点高亮背景或者前景，就移除PFLAG_SKIP_DRAW标志位
+                mPrivateFlags &= ~PFLAG_SKIP_DRAW;
+            } else {
+                // 如果没有设置背景、焦点高亮背景或者前景，就设置PFLAG_SKIP_DRAW标志位
+                mPrivateFlags |= PFLAG_SKIP_DRAW;
+            }
+        } else {
+            // 没有设置WILL_NOT_DRAW标志位，移除PFLAG_SKIP_DRAW标志位
+            mPrivateFlags &= ~PFLAG_SKIP_DRAW;
+        }
+        requestLayout();
+        invalidate(true);
+    }
+    // ...
+}
+```
+
+`setFlags()`方法有两个参数：flags和mask，flags就是要设置的标志位，mask表示标志位的位置，mPrivateFlags和mask进行按位与运算可以得到该mask对应的标志位，举个例子，执行了`setFlags(WILL_NOT_DRAW, DRAW_MASK)`后，通过`mPrivateFlags & DRAW_MASK`就可以得到**WILL_NOT_DRAW**这个标志位。这里省略了大量代码，只保留了和**DRAW_MASK**相关的部分，其实View的可见状态VISIBLE、INVISIBLE和GONE也是通过标志位来实现的，感兴趣的话可以看一看。可以看出，当View设置了**WILL_NOT_DRAW**标志位，并且没有设置背景、焦点高亮背景或者前景（后面统称为背景）的情况下，会设置**PFLAG_SKIP_DRAW**标志位，由于ViewGroup默认情况下是没有设置背景的，因此会设置**PFLAG_SKIP_DRAW**标志位，不会执行`draw()`方法，当然也不会执行`onDraw()`方法。
+
+如果想让ViewGroup的`draw()`方法被执行要怎么做呢？从上面的分析中也能看出，只要ViewGroup移除了**WILL_NOT_DRAW**标志位或者设置了背景，就会移除**PFLAG_SKIP_DRAW**标志位，使得`draw()`方法被调用，下面我们就看一下具体该怎么做。
+
+* 移除**WILL_NOT_DRAW**标志位
+
+
+View中有一个`setWillNotDraw()`方法，我们来看一下：
+
+```java
+public void setWillNotDraw(boolean willNotDraw) {
+    setFlags(willNotDraw ? WILL_NOT_DRAW : 0, DRAW_MASK);
+}
+```
+
+`setWillNotDraw()`方法内部会根据传入的willNotDraw参数调用`setFlags()`方法来设置或移除**WILL_NOT_DRAW**标志位，通过调用`setWillNotDraw(false)` 就可以移除**WILL_NOT_DRAW**标志位，使得ViewGroup的`draw()`方法得到调用。
+
+
+* 为ViewGroup设置背景（包括背景、焦点高亮背景和前景）
+
+这里就以设置背景的`setBackgroundDrawable()`方法为例分析，设置焦点高亮背景（对应`setDefaultFocusHighlight()`方法）和设置前景（对应`setForeground()`方法）类似。
+
+```java
+public void setBackgroundDrawable(Drawable background) {
+    // ...
+    if (background != null) {
+        // ...
+      	// 设置背景，移除PFLAG_SKIP_DRAW标志位
+        if ((mPrivateFlags & PFLAG_SKIP_DRAW) != 0) {
+            mPrivateFlags &= ~PFLAG_SKIP_DRAW;
+            requestLayout = true;
+        }
+    } else {
+        mBackground = null;
+      	// 取消背景，设置PFLAG_SKIP_DRAW标志位
+        if ((mViewFlags & WILL_NOT_DRAW) != 0
+                && (mDefaultFocusHighlight == null)
+                && (mForegroundInfo == null || mForegroundInfo.mDrawable == null)) {
+            mPrivateFlags |= PFLAG_SKIP_DRAW;
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+当设置了背景后，mPrivateFlags会移除**PFLAG_SKIP_DRAW**标志位，因此可以通过设置背景的方式来使得ViewGroup的`draw()`方法得到执行。
+
+通过以上两种方式就可以调用的ViewGroup的`draw()`方法了，从而使得`onDraw()`方法也会被调用。在开发中我们还是要考虑实际需求，因为ViewGroup本身只是一个容器，一般情况下是不需要绘制自身内容的，默认情况设置了**PFLAG_SKIP_DRAW**标志位也是出于系统优化的考虑，如果需要在`onDraw()`中绘制内容时再通过以上两种方式移除**PFLAG_SKIP_DRAW**标志位，或是直接在`dispatchDraw()`方法中进行绘制都可以。
 
 ## 2.自定义View须知
 
-**本文参考自《Android开发艺术探索》**
+**本节内容参考自《Android开发艺术探索》**
 
 自定义View的过程中有一些需要注意的地方，处理不好可能会导致设置的属性不生效等问题，影响View的显示和使用。
 
@@ -1783,13 +2137,7 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 ### 3.2.invalidate和requestLayout的区别
 
-**a|b: 添加标志位b;**
-
-**(a&b)!=0: 判断是否有标志位b;**
-
-**a&~b:清除标志位b;**
-
-**a^b: 取出a与b的不同部分;**
+我们在自定义View时可能需要更新View的显示，比如为View添加动画等等，有两个方法是我们经常会用到的`invalidate()`和`requestLayout()`，下面就来具体分析一下这两个方法的区别和使用场景。
 
 #### 3.2.1.invalidate
 
@@ -1798,6 +2146,82 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 #### 3.2.2.requestLayout
 
 
+
+```java
+public void requestLayout() {
+    // ...
+  	// 给View添加两个标志位
+    mPrivateFlags |= PFLAG_FORCE_LAYOUT;
+    mPrivateFlags |= PFLAG_INVALIDATED;
+
+    if (mParent != null && !mParent.isLayoutRequested()) {
+      	// 调用父类的requestLayout()方法
+        mParent.requestLayout();
+    }
+    // ...
+}
+```
+
+
+
+```java
+public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView) {
+    synchronized (this) {
+        if (mView == null) {
+            mView = view;
+            // ...
+            requestLayout();
+            // ...
+            view.assignParent(this);
+            // ...
+        }
+    }
+}
+```
+
+
+
+```java
+void assignParent(ViewParent parent) {
+    if (mParent == null) {
+        mParent = parent;
+    } else if (parent == null) {
+        mParent = null;
+    } else {
+        throw new RuntimeException("view " + this + " being added, but"
+                + " it already has a parent");
+    }
+}
+```
+
+
+
+```java
+public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
+    // ...
+    final boolean forceLayout = (mPrivateFlags & PFLAG_FORCE_LAYOUT) == PFLAG_FORCE_LAYOUT;
+
+    final boolean specChanged = widthMeasureSpec != mOldWidthMeasureSpec
+            || heightMeasureSpec != mOldHeightMeasureSpec;
+    final boolean isSpecExactly = MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY
+            && MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY;
+    final boolean matchesSpecSize = getMeasuredWidth() == MeasureSpec.getSize(widthMeasureSpec)
+            && getMeasuredHeight() == MeasureSpec.getSize(heightMeasureSpec);
+    final boolean needsLayout = specChanged
+            && (sAlwaysRemeasureExactly || !isSpecExactly || !matchesSpecSize);
+
+    if (forceLayout || needsLayout) {
+        // ...
+        onMeasure(widthMeasureSpec, heightMeasureSpec);
+        // ...
+        mPrivateFlags |= PFLAG_LAYOUT_REQUIRED;
+    }
+
+    mOldWidthMeasureSpec = widthMeasureSpec;
+    mOldHeightMeasureSpec = heightMeasureSpec;
+    // ...
+}
+```
 
 
 
