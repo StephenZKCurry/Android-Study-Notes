@@ -45,17 +45,14 @@ Window的创建时机是在**ActivityThread**的`performLaunchActivity()`方法�
 ```java
 private Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent) {
     // ...
-  
     java.lang.ClassLoader cl = appContext.getClassLoader();
     // 1.创建Activity对象
     activity = mInstrumentation.newActivity(
             cl, component.getClassName(), r.intent);
     // ...
-  
     // 2.创建Application对象，如果已经创建则不会重复创建
     Application app = r.packageInfo.makeApplication(false, mInstrumentation);
     // ...
-  
     if (activity != null) {
         // ...
         Window window = null;
@@ -99,16 +96,13 @@ final void attach(Context context, ActivityThread aThread,
                   Configuration config, String referrer, IVoiceInteractor voiceInteractor,
                   Window window, ActivityConfigCallback activityConfigCallback) {
     // ...
-
     // 创建PhoneWindow
     mWindow = new PhoneWindow(this, window, activityConfigCallback);
   	// 设置回调
   	mWindow.setWindowControllerCallback(this);
     mWindow.setCallback(this);
     mWindow.setOnWindowDismissedCallback(this);
-
     // ...
-	
   	// 设置WindowManager
     mWindow.setWindowManager(
             (WindowManager)context.getSystemService(Context.WINDOW_SERVICE),
@@ -179,7 +173,6 @@ private void installDecor() {
     }
     if (mContentParent == null) {
         mContentParent = generateLayout(mDecor);
-
         // ...
     }
 }
@@ -205,7 +198,6 @@ protected DecorView generateDecor(int featureId) {
 protected ViewGroup generateLayout(DecorView decor) {
     TypedArray a = getWindowStyle();
     // ...
-
     int layoutResource;
     // 根据Features（通过requestFeature()方法添加，可以看做是Window的主题样式）设置相应的布局
     // 伪代码
@@ -221,7 +213,6 @@ protected ViewGroup generateLayout(DecorView decor) {
 
     ViewGroup contentParent = (ViewGroup) findViewById(ID_ANDROID_CONTENT);
     // ...
-
     return contentParent;
 }
 ```
@@ -299,7 +290,6 @@ private void ensureSubDecor() {
 
 private ViewGroup createSubDecor() {
     TypedArray a = mContext.obtainStyledAttributes(R.styleable.AppCompatTheme);
-
     // ...
 	// 分析1
     mWindow.getDecorView();
@@ -315,9 +305,8 @@ private ViewGroup createSubDecor() {
     } else {
 
     }
-
+  
     // ...
-
   	// 分析2
     final ContentFrameLayout contentView = (ContentFrameLayout) subDecor.findViewById(
             R.id.action_bar_activity_content);
@@ -334,15 +323,12 @@ private ViewGroup createSubDecor() {
         
         windowContentView.setId(View.NO_ID);
         contentView.setId(android.R.id.content);
-
         // ...
     }
     
   	// 分析3
     mWindow.setContentView(subDecor);
-
     // ...
-
     return subDecor;
 }
 ```
@@ -393,11 +379,8 @@ public void handleResumeActivity(IBinder token, boolean finalStateRequest, boole
     // 方法内部调用Activity的onResume()方法
     final ActivityClientRecord r = performResumeActivity(token, finalStateRequest, reason);
     // ...
-
     final Activity a = r.activity;
-
     // ...
-
     if (r.window == null && !a.mFinished && willBeVisible) {
         r.window = r.activity.getWindow();
         // 获取DecorView
@@ -451,7 +434,6 @@ public void addView(@NonNull View view, @NonNull ViewGroup.LayoutParams params) 
 public void addView(View view, ViewGroup.LayoutParams params,
                     Display display, Window parentWindow) {
     // ...
-
     ViewRootImpl root;
     // ...
     // 创建ViewRootImpl对象
@@ -574,7 +556,7 @@ private void performTraversals() {
 * Activity的`onCreate()`方法中调用`setContentView()`方法，创建DecorView和contentView（页面内容根布局），将指定的布局文件加载到contentView中
 * Activity的`onResume()`方法调用之后，将DecorView添加到Window中，之后依次开始View的measure、layout和draw流程
 
-从上面几个流程的先后顺序我们就能清楚为什么在`onResume()`方法中或者`onResume()`方法之前获取不到View的宽高，就是因为此时View还未执行measure流程。
+从上面几个流程的先后顺序我们就能清楚为什么在`onResume()`方法中或者`onResume()`方法之前获取不到View的宽高，就是因为此时View还未执行measure和layout流程。
 
 ### 1.3.measure
 
@@ -764,7 +746,7 @@ private void performMeasure(int childWidthMeasureSpec, int childHeightMeasureSpe
 private static int getRootMeasureSpec(int windowSize, int rootDimension) {
     int measureSpec;
     switch (rootDimension) {
-		case ViewGroup.LayoutParams.MATCH_PARENT:
+        case ViewGroup.LayoutParams.MATCH_PARENT:
             measureSpec = MeasureSpec.makeMeasureSpec(windowSize, MeasureSpec.EXACTLY);
             break;
         case ViewGroup.LayoutParams.WRAP_CONTENT:
@@ -775,7 +757,7 @@ private static int getRootMeasureSpec(int windowSize, int rootDimension) {
             break;
     }
     return measureSpec;
-
+}
 ```
 
 逻辑还是比较简单的，参数windowSize传递过来的值是desiredWindowWidth和desiredWindowHeight，通过查看源码可以发现这两个值表示屏幕的宽高尺寸，因此我们可以得出以下结论：
@@ -1192,7 +1174,7 @@ protected int getSuggestedMinimumWidth() {
 
 用一张图总结一下单一View的measure流程：
 
-![](C:\Users\zhukai\Desktop\View的measure流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/View%E7%9A%84measure%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 ##### 1.3.3.2.ViewGroup的measure流程
 
@@ -1283,7 +1265,6 @@ void measureVertical(int widthMeasureSpec, int heightMeasureSpec) {
 
     setMeasuredDimension(resolveSizeAndState(maxWidth, widthMeasureSpec, childState),
             heightSizeAndState);
-
     // ...
 }
 ```
@@ -1534,8 +1515,7 @@ private boolean setOpticalFrame(int left, int top, int right, int bottom) {
 }
 
 protected boolean setFrame(int left, int top, int right, int bottom) {
-    boolean changed = false;
-
+    boolean changed = false
     // ...
     if (mLeft != left || mRight != right || mTop != top || mBottom != bottom) {
         changed = true;
@@ -1706,7 +1686,7 @@ public void layout(int l, int t, int r, int b) {
 
 ### 1.5.draw
 
-通过前面的measure和layout两个流程，已经确定出了View的大小和位置，接下里就要把View显示出来了，draw的作用是就将View绘制到屏幕上。相比于前两个流程，View的绘制流程是最简单的，因为源码的逻辑很少，基本上都要靠我们自己去定义如何绘制。同样地，我们依然分两种情况进行分析，包括单一View的绘制和ViewGroup的绘制。
+通过前面的measure和layout两个流程，已经确定出了View的大小和位置，接下里就要把View显示出来了，draw的作用是就将View绘制到屏幕上。相比于前两个流程，View的绘制流程是最简单的，因为源码的逻辑很少，基本上都要靠我们自己去定义如何绘制。同样地，我们分两种情况进行分析，包括单一View的绘制和ViewGroup的绘制。
 
 #### 1.5.1.单一View的draw流程
 
@@ -1776,7 +1756,7 @@ private void drawBackground(Canvas canvas) {
 
 **View的onDraw方法**
 
-```
+```java
 protected void onDraw(Canvas canvas) {
 }
 ```
@@ -1831,7 +1811,7 @@ public void onDrawForeground(Canvas canvas) {
 
 用一张流程图总结一下单一View的draw流程：
 
-![](C:\Users\zhukai\Desktop\View的draw流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/View%E7%9A%84draw%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 虽然View的绘制流程可以分为以上四步，但是我们在自定义View中只需要重写`onDraw()`方法，按需要进行绘制就可以了。
 
@@ -1889,7 +1869,7 @@ boolean draw(Canvas canvas, ViewGroup parent, long drawingTime) {
 
 总结一下ViewGroup的draw流程，整体步骤和单一View的draw流程是一样的，不同的是ViewGroup重写了`dispatchDraw()`方法，在内部遍历子View并完成子View的绘制。
 
-![](C:\Users\zhukai\Desktop\ViewGroup的draw流程.jpg)
+![](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/images/ViewGroup%E7%9A%84draw%E6%B5%81%E7%A8%8B.jpg?raw=true)
 
 最后还是来梳理一下整个页面的draw流程，从ViewRootImpl的`performDraw()`方法开始：
 
@@ -1902,23 +1882,153 @@ private void performDraw() {
 
 private boolean draw(boolean fullRedrawNeeded) {
     // ...
-    if (!drawSoftware(surface, mAttachInfo, xOffset, yOffset,
-            scalingRequired, dirty, surfaceInsets)) {
-        return false;
+    if (mAttachInfo.mThreadedRenderer != null && mAttachInfo.mThreadedRenderer.isEnabled()) {
+        // ...
+      	// 开启了硬件加速
+        mAttachInfo.mThreadedRenderer.draw(mView, mAttachInfo, this, callback);
+    } else {
+        // ...
+      	// 关闭了硬件加速
+        if (!drawSoftware(surface, mAttachInfo, xOffset, yOffset,
+                scalingRequired, dirty, surfaceInsets)) {
+            return false;
+        }
     }
     // ...
     return useAsyncReport;
 }
+```
 
+`performDraw()`方法内部又会调用`draw()`方法，在`draw()`方法中会根据是否开启了硬件加速执行相应的逻辑，硬件加速就是通过引入GPU来提高绘制和界面刷新的效率，不过也有可能导致自定义View出现问题，在API 13（Android 4.0）及以上版本中，硬件加速是默认开启的，我们可以手动关闭硬件加速。关于硬件加速我也了解得不多，这里就不多提了，感兴趣的话可以查阅一下相关资料。下面我们就分别看一下开启和关闭硬件加速的情况下都是如何完成页面绘制的吧。
+
+* **关闭硬件加速**
+
+关闭硬件加速的情况下会执行`drawSoftware()`方法，我们来看一下这个方法：
+
+```java
 private boolean drawSoftware(Surface surface, AttachInfo attachInfo, int xoff, int yoff,
                              boolean scalingRequired, Rect dirty, Rect surfaceInsets) {
     // ...
     mView.draw(canvas);
+    // ...
     return true;
 }
 ```
 
-可以看出经过一些列调用最后会执行mView的`draw()`方法，这里的mView是DecorView，前面已经分析过了，因此现在进入了DecorView的绘制流程，接下来会遍历DecorView的所有子View，完成子View的绘制，如果子View是一个ViewGroup则重复该过程，直到所有的子View都绘制完成。
+方法内部会调用mView的`draw()`方法，这里的mView是DecorView，前面已经分析过了，因此现在进入了DecorView的绘制流程，接下来就和ViewGroup的绘制流程一样了，即遍历DecorView的所有子View，完成子View的绘制，如果子View是一个ViewGroup则重复该过程，直到所有的子View都绘制完成。
+
+* **开启硬件加速**
+
+开启硬件加速的情况下会执行`mAttachInfo.mThreadedRenderer.draw(mView, mAttachInfo, this, callback)`，mThreadedRenderer的类型为**ThreadedRenderer**，我们来看一下ThreadedRenderer的`draw()`方法：
+
+```java
+void draw(View view, AttachInfo attachInfo, DrawCallbacks callbacks,
+          FrameDrawingCallback frameDrawingCallback) {
+    // ...
+    updateRootDisplayList(view, callbacks);
+    // ...
+}
+
+private void updateRootDisplayList(View view, DrawCallbacks callbacks) {
+    // ...
+    updateViewTreeDisplayList(view);
+    // ...
+}
+
+private void updateViewTreeDisplayList(View view) {
+    view.mPrivateFlags |= View.PFLAG_DRAWN;
+    view.mRecreateDisplayList = (view.mPrivateFlags & View.PFLAG_INVALIDATED)
+            == View.PFLAG_INVALIDATED;
+    view.mPrivateFlags &= ~View.PFLAG_INVALIDATED;
+    view.updateDisplayListIfDirty();
+    view.mRecreateDisplayList = false;
+}
+```
+
+经过一系列调用最终会调用`updateViewTreeDisplayList()`方法，这里传入的view为DecorView，方法内部会根据view是否设置了**PFLAG_INVALIDATED**标志位来给成员变量mRecreateDisplayList赋值，由于DecorView没有设置该标志位，因此mRecreateDisplayList的值为false。接下来会调用`updateDisplayListIfDirty()`方法，它定义在View中，我们来看一下：
+
+```java
+public RenderNode updateDisplayListIfDirty() {
+    final RenderNode renderNode = mRenderNode;
+    // ...
+    if ((mPrivateFlags & PFLAG_DRAWING_CACHE_VALID) == 0
+            || !renderNode.isValid()
+            || (mRecreateDisplayList)) {
+        if (renderNode.isValid()
+                && !mRecreateDisplayList) {
+            // 不需要重新进行绘制
+            mPrivateFlags |= PFLAG_DRAWN | PFLAG_DRAWING_CACHE_VALID;
+            mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+            dispatchGetDisplayList();
+
+            return renderNode;
+        }
+
+        // 需要重新进行绘制
+        mRecreateDisplayList = true;
+
+        try {
+            // ...
+            if ((mPrivateFlags & PFLAG_SKIP_DRAW) == PFLAG_SKIP_DRAW) {
+              	// 如果设置了PFLAG_SKIP_DRAW标志位，执行dispatchDraw()方法
+                dispatchDraw(canvas);
+                drawAutofilledHighlight(canvas);
+                if (mOverlay != null && !mOverlay.isEmpty()) {
+                    mOverlay.getOverlayView().draw(canvas);
+                }
+                if (debugDraw()) {
+                    debugDrawFocus(canvas);
+                }
+            } else {
+             	// 没有设置PFLAG_SKIP_DRAW标志位，执行draw()方法
+                draw(canvas);
+            }
+            // ...
+        } finally {
+            renderNode.end(canvas);
+            setDisplayListProperties(renderNode);
+        }
+    } else {
+        mPrivateFlags |= PFLAG_DRAWN | PFLAG_DRAWING_CACHE_VALID;
+        mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+    }
+    return renderNode;
+}
+```
+
+我们先来看一下第一个if判断的几个条件：
+
+* **mPrivateFlags & PFLAG_DRAWING_CACHE_VALID == 0**
+
+由于DecorView没有设置**PFLAG_DRAWING_CACHE_VALID**标志位，因此该条件满足。
+
+* **!renderNode.isValid()**
+
+`isValid()`方法字面意思上是判断renderNode是否有效，那么什么时候是有效的呢？我们会发现`updateDisplayListIfDirty()`方法最后调用了`renderNode.end(canvas)`，点进这个`end()`方法看一下：
+
+```java
+/**
+ * Ends the recording for this display list. A display list cannot be
+ * replayed if recording is not finished. Calling this method marks
+ * the display list valid and {@link #isValid()} will return true.
+ *
+ * @see #start(int, int)
+ * @see #isValid()
+ */
+public void end(DisplayListCanvas canvas) {
+    long displayList = canvas.finishRecording();
+    nSetDisplayList(mNativeRenderNode, displayList);
+    canvas.recycle();
+}
+```
+
+从注释**Calling this method marks the display list valid and isValid() will return true**中可以看出当调用了`end()`方法后，`isValid()`会返回true，由于此时是页面首次绘制，还没有调用过`end()`方法，因此`isValid()`返回false，`!renderNode.isValid()`为true，该条件满足。
+
+* **mRecreateDisplayList**
+
+上面也说过了，由于设置**PFLAG_INVALIDATED**标志位，此时DecorView的mRecreateDisplayList值为false，该条件不满足。
+
+由于满足了两个条件，因此会进入到第一个if判断中，接下来又是一个if判断，判断条件是`renderNode.isValid() && !mRecreateDisplayList` ，根据上面的分析，该条件不满足，因此不会执行if中的逻辑。接下来会判断是否设置了**PFLAG_SKIP_DRAW**标志位，关于这个标志位的作用我后面会分析，这里先记住ViewGroup默认情况下都会设置这个标志位，由于DecorView就是一个ViewGroup，会设置该标志位，因此会执行`dispatchDraw()`方法，遍历所有子View，完成对子View的绘制，如果子View是一个ViewGroup则接着遍历下面的子View，直到所有子View都完成绘制。
 
 #### 1.5.3.ViewGroup的draw()方法调用问题
 
@@ -1932,7 +2042,7 @@ private boolean drawSoftware(Surface surface, AttachInfo attachInfo, int xoff, i
 >
 > **a^b**：取出a与b的不同部分
 
-感叹一下，位运算在Android中还是很常见的，尤其是在View的源码中，刚开始看的时候非常痛苦，不过熟悉了上面这几个后就会容易多了。
+感叹一下，位运算在Android中还是很常见的，尤其是在View的源码中，熟悉上面这个几个位运算操作对我们阅读源码还是有很大帮助的。
 
 下面进入正题，当我们的自定义View继承自ViewGroup时会遇到一个问题，默认情况下`draw()`方法和`onDraw()`方法都不会被调用，只会调用了`dispatchDraw()`方法，可以自己尝试一下，我这里就不展示了。我们下面就来分析一下原因，首先来看上面分析过的三个参数的`draw()`方法：
 
@@ -2133,6 +2243,8 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 ### 3.1.View获取宽高
 
+根据此前的分析，View的三大流程都是在`onResume()`方法调用之后才开始的，因此在`onCreate()`、`onStart()`和`onResume()`方法中是无法通过`getWidth()`/`getHeight()`获取到View的宽高的。如果在开发中有这样的需求应该怎么办呢，当然还是有办法的，下面就以在`onCreate()`方法中获取View的宽高为例，介绍几种可行的方法。
+
 
 
 ### 3.2.invalidate和requestLayout的区别
@@ -2141,28 +2253,128 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 #### 3.2.1.invalidate
 
-
-
-#### 3.2.2.requestLayout
-
-
+**View的invalidate方法**
 
 ```java
-public void requestLayout() {
-    // ...
-  	// 给View添加两个标志位
-    mPrivateFlags |= PFLAG_FORCE_LAYOUT;
-    mPrivateFlags |= PFLAG_INVALIDATED;
+public void invalidate() {
+    invalidate(true);
+}
 
-    if (mParent != null && !mParent.isLayoutRequested()) {
-      	// 调用父类的requestLayout()方法
-        mParent.requestLayout();
-    }
-    // ...
+public void invalidate(boolean invalidateCache) {
+    invalidateInternal(0, 0, mRight - mLeft, mBottom - mTop, invalidateCache, true);
 }
 ```
 
+可以看出View的`invalidate()`方法最终会调用`invalidateInternal()`方法：
 
+```java
+void invalidateInternal(int l, int t, int r, int b, boolean invalidateCache,
+                        boolean fullInvalidate) {
+	// ...
+  	// 判断是否跳过重绘
+    if (skipInvalidate()) {
+        return;
+    }
+    
+  	// 判断是否需要重绘
+    if ((mPrivateFlags & (PFLAG_DRAWN | PFLAG_HAS_BOUNDS)) == (PFLAG_DRAWN | PFLAG_HAS_BOUNDS)
+            || (invalidateCache && (mPrivateFlags & PFLAG_DRAWING_CACHE_VALID) == PFLAG_DRAWING_CACHE_VALID)
+            || (mPrivateFlags & PFLAG_INVALIDATED) != PFLAG_INVALIDATED
+            || (fullInvalidate && isOpaque() != mLastIsOpaque)) {
+        if (fullInvalidate) {
+            mLastIsOpaque = isOpaque();
+            mPrivateFlags &= ~PFLAG_DRAWN;
+        }
+
+        mPrivateFlags |= PFLAG_DIRTY;
+
+        if (invalidateCache) {
+            // 设置PFLAG_INVALIDATED标志位
+            mPrivateFlags |= PFLAG_INVALIDATED;
+          	// 移除PFLAG_DRAWING_CACHE_VALID标志位
+            mPrivateFlags &= ~PFLAG_DRAWING_CACHE_VALID;
+        }
+
+        final AttachInfo ai = mAttachInfo;
+        final ViewParent p = mParent;
+        if (p != null && ai != null && l < r && t < b) {
+            // damage表示要重绘的区域
+            final Rect damage = ai.mTmpInvalRect;
+            damage.set(l, t, r, b);
+            // 将要重绘的区域传给父View
+            p.invalidateChild(this, damage);
+        }
+        // ...
+    }
+}
+```
+
+`invalidateInternal()`方法中首先会根据`skipInvalidate()`方法判断是否跳过绘制，如果同时满足以下三个条件就直接return，跳过重绘。
+
+* View是不可见的
+* 当前没有设置动画
+* 父View的类型不是ViewGroup或者父ViewGoup不处于过渡态
+
+接下来根据一系列条件判断是否需要重绘，如果满足以下任意一条就进行重绘。
+
+* View已经被绘制完成并且具有边界
+* invalidateCache为true并且设置了**PFLAG_DRAWING_CACHE_VALID**标志位，即绘制缓存可用
+* 没有设置**PFLAG_INVALIDATED**标志位，即没有被重绘过
+* fullInvalidate为true并且透明度发生了变化
+
+接下来判断如果invalidateCache为true，就设置**PFLAG_INVALIDATED**标志位，这一步很重要，后面还会提到，通过上面的调用也能看出这里的invalidateCache传入的值为true，因此会设置这个标志位。方法的最后会调用mParent即父View的`invalidateChild()`方法，将要重绘的区域damage传递给父View。接下里我们来看ViewGroup的`invalidateChild()`方法：
+
+**ViewGroup的invalidateChild方法**
+
+```java
+@Override
+public final void invalidateChild(View child, final Rect dirty) {
+    final AttachInfo attachInfo = mAttachInfo;
+    if (attachInfo != null && attachInfo.mHardwareAccelerated) {
+      	// 开启了硬件加速
+        onDescendantInvalidated(child, child);
+        return;
+    }
+
+    ViewParent parent = this;
+    if (attachInfo != null) {
+        // ...
+        do {
+            View view = null;
+            if (parent instanceof View) {
+                view = (View) parent;
+            }
+            // ...
+            parent = parent.invalidateChildInParent(location, dirty);
+            // ...
+        } while (parent != null);
+    }
+}
+```
+
+方法内部首先会判断是否开启了硬件加速，接下来我们就分别看一下开启和关闭硬件加速的情况下重绘流程时怎样的。
+
+* 关闭硬件加速
+
+关闭硬件加速的情况下会循环调用`invalidateChildInParent()`方法，将返回值赋给parent，当parent为null时退出循环，我们来看ViewGroup的`invalidateChildInParent()`方法。
+
+```java
+@Override
+public ViewParent invalidateChildInParent(final int[] location, final Rect dirty) {
+    if ((mPrivateFlags & (PFLAG_DRAWN | PFLAG_DRAWING_CACHE_VALID)) != 0) {
+        // ...
+      	// 移除PFLAG_DRAWING_CACHE_VALID标志位
+      	mPrivateFlags &= ~PFLAG_DRAWING_CACHE_VALID;
+      	// ...
+        return mParent;
+    }
+    return null;
+}
+```
+
+这里省略了大量代码，主要是对子View传递过来的重绘区域进行运算处理，方法最后会返回mParent。因此在`invalidateChild()`方法中会通过循环逐层调用父View的`invalidateChildInParent()`方法，那么当调用到最顶层ViewGroup——DecorView的`invalidateChild()`方法时，它的mParent是谁呢？我们可以回顾一下ViewRootImpl的`setView()`方法：
+
+**ViewRootImpl的setView方法**
 
 ```java
 public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView) {
@@ -2179,7 +2391,9 @@ public void setView(View view, WindowManager.LayoutParams attrs, View panelParen
 }
 ```
 
+可以发现方法执行了`view.assignParent(this)`，由于mView就是DecorView，因此这里的view也是DecorView，我们来看一下`assignParent()`方法，它定义在View中：
 
+**View的assignParent方法**
 
 ```java
 void assignParent(ViewParent parent) {
@@ -2194,7 +2408,284 @@ void assignParent(ViewParent parent) {
 }
 ```
 
+很明显`assignParent()`方法完成了View的成员变量mParent的赋值，因此DecorView的mParent就是上面传入的this，也就是ViewRootImpl。既然清楚了DecorView的mParent，接下来我们就来看一下ViewRootImpl的`invalidateChildInParent()`方法：
 
+**ViewRootImpl的invalidateChildInParent方法**
+
+```java
+@Override
+public ViewParent invalidateChildInParent(int[] location, Rect dirty) {
+    checkThread();
+    // ...
+    invalidateRectOnScreen(dirty);
+    return null;
+}
+```
+
+方法内部首先会调用`checkThread()`方法：
+
+```java
+void checkThread() {
+    if (mThread != Thread.currentThread()) {
+        throw new CalledFromWrongThreadException(
+                "Only the original thread that created a view hierarchy can touch its views.");
+    }
+}
+```
+
+`checkThread()`方法会判断当前线程是否为主线程，如果不是主线程就直接抛出异常，因此我们需要特别注意，**`invalidate()`方法必须在主线程中调用**。回到ViewRootImpl的`invalidateChildInParent()`方法，最后调用了`invalidateRectOnScreen()`方法，同时由于返回值为null，因此执行完`invalidateChildInParent()`方法后parent被赋值为null，退出do-while循环。接下来我们就来看一下`invalidateRectOnScreen()`方法：
+
+```java
+private void invalidateRectOnScreen(Rect dirty) {
+    // ...
+    if (!mWillDrawSoon && (intersected || mIsAnimating)) {
+        scheduleTraversals();
+    }
+}
+```
+
+`invalidateRectOnScreen()`方法内部会调用`scheduleTraversals()`方法，这个方法我们很熟悉了，接下来会调用`performTraversals()`方法，开始View的三大流程，这里再来回顾一下：
+
+```java
+private void performTraversals() {
+    // ...
+    boolean layoutRequested = mLayoutRequested && (!mStopped || mReportNextDraw);
+    if (layoutRequested) {
+        // ...
+        // 调用performMeasure()方法开始measure流程
+        measureHierarchy(host, lp, res,
+                desiredWindowWidth, desiredWindowHeight);
+    }
+    // ...
+    final boolean didLayout = layoutRequested && (!mStopped || mReportNextDraw);
+    if (didLayout) {
+        // ...
+        // 开始layout流程
+        performLayout(lp, mWidth, mHeight);
+    }
+    // ...
+    // 开始draw流程
+    performDraw();
+    // ...
+}
+```
+
+由于此时没有给mLayoutRequested赋值，它的默认值为false，因此不会调用`measureHierarchy()`和`performLayout()`方法，只调用`performDraw()`方法，换句话说就是不会执行measure和layout流程，只执行draw流程，接下来就是调用DecorView的`draw()`方法，遍历DecorView的子View，逐层完成子View的绘制。
+
+* 开启硬件加速
+
+
+开启硬件加速时在ViewGroup的`invalidateChild()`方法中会调用`onDescendantInvalidated()`方法并直接返回，不会执行后面的`invalidateChildInParent()`方法，我们来看一下`onDescendantInvalidated()`方法：
+
+```java
+@Override
+public void onDescendantInvalidated(@NonNull View child, @NonNull View target) {
+    // ...
+    if (mParent != null) {
+        mParent.onDescendantInvalidated(this, target);
+    }
+}
+```
+
+方法内部会调用mParent的`onDescendantInvalidated()`方法，和`invalidateChildInParent()`类似，接下来会逐级调用父View的`onDescendantInvalidated()`方法，最后来到ViewRootImpl的`onDescendantInvalidated()`方法。
+
+**ViewRootImpl的onDescendantInvalidated方法**
+
+```java
+@Override
+public void onDescendantInvalidated(@NonNull View child, @NonNull View descendant) {
+    if ((descendant.mPrivateFlags & PFLAG_DRAW_ANIMATION) != 0) {
+        mIsAnimating = true;
+    }
+    invalidate();
+}
+```
+
+接下来会调用ViewRootImpl的`invalidate`方法：
+
+```java
+void invalidate() {
+    mDirty.set(0, 0, mWidth, mHeight);
+    if (!mWillDrawSoon) {
+        scheduleTraversals();
+    }
+}
+```
+
+可以看到这里同样调用了`scheduleTraversals()`方法，之后的流程和关闭硬件加速的情况类似，同样是调用`performDraw()`方法，不同的是开启硬件加速的情况下会执行`mAttachInfo.mThreadedRenderer.draw(mView, mAttachInfo, this, callback)`，前面也分析过了，之后会依次调用ThreadedRenderer的`updateRootDisplayList()`、`updateViewTreeDisplayList()`方法。
+
+```java
+private void updateViewTreeDisplayList(View view) {
+    view.mPrivateFlags |= View.PFLAG_DRAWN;
+    view.mRecreateDisplayList = (view.mPrivateFlags & View.PFLAG_INVALIDATED)
+            == View.PFLAG_INVALIDATED;
+    view.mPrivateFlags &= ~View.PFLAG_INVALIDATED;
+    view.updateDisplayListIfDirty();
+    view.mRecreateDisplayList = false;
+}
+```
+
+这里需要注意，根据此前的分析，在调用View的`invalidate()`方法后，会给当前View设置**PFLAG_INVALIDATED**标志位，因此它的mRecreateDisplayList变量值为true，而其他的父级View由于没有设置**PFLAG_INVALIDATED**标志位，mRecreateDisplayList值为false。接下来会调用view的`updateDisplayListIfDirty()`方法，这里的view是DecorView。
+
+```java
+public RenderNode updateDisplayListIfDirty() {
+    final RenderNode renderNode = mRenderNode;
+    // ...
+    if ((mPrivateFlags & PFLAG_DRAWING_CACHE_VALID) == 0
+            || !renderNode.isValid()
+            || (mRecreateDisplayList)) {
+        if (renderNode.isValid()
+                && !mRecreateDisplayList) {
+            // 不需要重新进行绘制
+            mPrivateFlags |= PFLAG_DRAWN | PFLAG_DRAWING_CACHE_VALID;
+            mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+            dispatchGetDisplayList();
+
+            return renderNode;
+        }
+
+        // 需要重新进行绘制
+        mRecreateDisplayList = true;
+
+        try {
+            // ...
+            if ((mPrivateFlags & PFLAG_SKIP_DRAW) == PFLAG_SKIP_DRAW) {
+              	// 如果设置了PFLAG_SKIP_DRAW标志位，执行dispatchDraw()方法
+                dispatchDraw(canvas);
+                drawAutofilledHighlight(canvas);
+                if (mOverlay != null && !mOverlay.isEmpty()) {
+                    mOverlay.getOverlayView().draw(canvas);
+                }
+                if (debugDraw()) {
+                    debugDrawFocus(canvas);
+                }
+            } else {
+             	// 没有设置PFLAG_SKIP_DRAW标志位，执行draw()方法
+                draw(canvas);
+            }
+            // ...
+        } finally {
+            renderNode.end(canvas);
+            setDisplayListProperties(renderNode);
+        }
+    } else {
+        mPrivateFlags |= PFLAG_DRAWN | PFLAG_DRAWING_CACHE_VALID;
+        mPrivateFlags &= ~PFLAG_DIRTY_MASK;
+    }
+    return renderNode;
+}
+```
+
+这里就和此前的分析不同了，由于页面首次绘制完成后执行了`renderNode.end(canvas)`，因此这里`renderNode.isValid()`返回值为true，而DecorView的mRecreateDisplayList值为false，因不会执行后面的重新绘制逻辑，取而代之的是调用`dispatchGetDisplayList()`方法，我们来看一下这个方法：
+
+```java
+@Override
+protected void dispatchGetDisplayList() {
+    final int count = mChildrenCount;
+    final View[] children = mChildren;
+    for (int i = 0; i < count; i++) {
+        final View child = children[i];
+        if (((child.mViewFlags & VISIBILITY_MASK) == VISIBLE || child.getAnimation() != null)) {
+            recreateChildDisplayList(child);
+        }
+    }
+    // ...
+}
+
+private void recreateChildDisplayList(View child) {
+    child.mRecreateDisplayList = (child.mPrivateFlags & PFLAG_INVALIDATED) != 0;
+    child.mPrivateFlags &= ~PFLAG_INVALIDATED;
+    child.updateDisplayListIfDirty();
+    child.mRecreateDisplayList = false;
+}
+```
+
+`dispatchGetDisplayList()`方法内部会遍历子View，依次调用`recreateChildDisplayList()`方法，不难看出`recreateChildDisplayList()`方法和`updateViewTreeDisplayList()`方法很像，接下来同样会调用`updateDisplayListIfDirty()`方法，对于没有设置**PFLAG_INVALIDATED**标志位的View，它的mRecreateDisplayList值为false，会重复上面的过程，即调用`dispatchGetDisplayList()`方法；而对于调用了`invalidate()`方法的View，由于设置了**PFLAG_INVALIDATED**标志位，它的mRecreateDisplayList值为true，会执行`updateDisplayListIfDirty()`方法最后的重绘逻辑，即调用`执行dispatchDraw()`方法或者`draw()`方法完成自身及子View的绘制。
+
+最后总结一下`invalidate()`方法，调用View的`invalidate()`方法后会逐级调用父View的方法，最终导致ViewRootImpl的`scheduleTraversals()`方法被调用，进而调用`performTraversals()`方法。由于mLayoutRequested的值为false，因此不会执行measure和layout流程，只执行draw流程。draw流程的执行过程和是否开启硬件加速有关：
+
+* 如果关闭了硬件加速，从DecorView开始的所有View都会重新完成绘制
+* 如果开启了硬件加速，只有调用`invalidate()`方法的View（包括它的子View）会完成重新绘制
+
+由此也可以看出，开启硬件加速确实可以提高重绘的效率。
+
+此外，由于`invalidate()`方法必须在主线程中调用，那么如果我们想要在子线程中刷新视图要怎么做呢？不用担心，官方还为我们提供了一个`postInvalidate()`方法，其实从名称上我们也能猜到它的作用了，就是用于在子线程中刷新视图，简单看一下它的定义：
+
+```java
+public void postInvalidate() {
+    postInvalidateDelayed(0);
+}
+
+public void postInvalidateDelayed(long delayMilliseconds) {
+    final AttachInfo attachInfo = mAttachInfo;
+    if (attachInfo != null) {
+        attachInfo.mViewRootImpl.dispatchInvalidateDelayed(this, delayMilliseconds);
+    }
+}
+
+public void dispatchInvalidateDelayed(View view, long delayMilliseconds) {
+    Message msg = mHandler.obtainMessage(MSG_INVALIDATE, view);
+    mHandler.sendMessageDelayed(msg, delayMilliseconds);
+}
+```
+
+哈哈，果然还是用到了Handler，mHandler是ViewRootImpl中的一个成员变量，类型为**ViewRootHandler**，我们来看一下ViewRootHandler对**MSG_INVALIDATE**消息的处理：
+
+```java
+final class ViewRootHandler extends Handler {
+    // ...
+    @Override
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case MSG_INVALIDATE:
+                ((View) msg.obj).invalidate();
+                break;
+            // ...
+        }
+    }
+}
+```
+
+可以看出最后还是调用了`invalidate()`方法，因此`postInvalidate()`方法其实就是通过Handler完成了线程的切换，使得`invalidate()`方法在主线程中被调用。
+
+
+#### 3.2.2.requestLayout
+
+**View的requestLayout方法**
+
+```java
+public void requestLayout() {
+    // ...
+  	// 给View添加两个标志位
+    mPrivateFlags |= PFLAG_FORCE_LAYOUT;
+    mPrivateFlags |= PFLAG_INVALIDATED;
+
+    if (mParent != null && !mParent.isLayoutRequested()) {
+      	// 调用父类的requestLayout()方法
+        mParent.requestLayout();
+    }
+    // ...
+}
+```
+
+`requestLayout()`方法内部会调用mParent即父View的`requestLayout()`方法，最终会来到ViewRootImpl的`requestLayout()`方法：
+
+**ViewRootImpl的requestLayout方法**
+
+```java
+@Override
+public void requestLayout() {
+    if (!mHandlingLayoutInLayoutRequest) {
+        checkThread();
+        mLayoutRequested = true;
+        scheduleTraversals();
+    }
+}
+```
+
+首先还是会进行线程的检查，因此`requestLayout()`方法同样只能在主线程中调用。接着会把mLayoutRequested赋值为true并调用`scheduleTraversals()`方法。后面的流程相信也不用我多说了，调用`performTraversals()`方法，由于将mLayoutRequested赋值为true，因此会依次执行`measureHierarchy()`、`performLayout()`和`performDraw()`方法，开始View的三大流程。
+
+到这里还没完，我们需要探究一下View调用`requrestLayout()`是否会导致View树中的所有View都进行重新测量、布局和绘制。我们注意到调用`requestLayout()`方法后，会为当前View及所有父级View添加**PFLAG_FORCE_LAYOUT**和**PFLAG_INVALIDATED**标志位。首先来回顾一下View的`measure()`方法：
 
 ```java
 public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
@@ -2214,6 +2705,7 @@ public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
         // ...
         onMeasure(widthMeasureSpec, heightMeasureSpec);
         // ...
+      	// 设置PFLAG_LAYOUT_REQUIRED标志位
         mPrivateFlags |= PFLAG_LAYOUT_REQUIRED;
     }
 
@@ -2223,17 +2715,298 @@ public final void measure(int widthMeasureSpec, int heightMeasureSpec) {
 }
 ```
 
+可以看出，当View设置了**PFLAG_FORCE_LAYOUT**标志位后，forceLayout的值为true，因此会执行`onMeasure()` 方法，而对于没有设置**PFLAG_FORCE_LAYOUT**标志位的View，需要判断测量尺寸是否发生了改变，如果改变了才会调用`onMeasure()`方法。在调用`onMeasure()`方法后会给View设置**PFLAG_LAYOUT_REQUIRED**标志位，我们再来看View的`layout()`方法：
 
+```java
+public void layout(int l, int t, int r, int b) {
+    // ...
+    int oldL = mLeft;
+    int oldT = mTop;
+    int oldB = mBottom;
+    int oldR = mRight;
+
+    boolean changed = isLayoutModeOptical(mParent) ?
+            setOpticalFrame(l, t, r, b) : setFrame(l, t, r, b);
+
+    if (changed || (mPrivateFlags & PFLAG_LAYOUT_REQUIRED) == PFLAG_LAYOUT_REQUIRED) {
+        onLayout(changed, l, t, r, b);
+        // ...
+    }
+    // ...
+}
+```
+
+对于设置了**PFLAG_LAYOUT_REQUIRED**标志位的View，`onLayout()`方法肯定会执行，另一种情况就是View的四个顶点坐标发生改变，也会执行`onLayout()`方法。
+
+结合上面的分析可以得出结论，当View调用了`requestLayout()`方法后，自身及父级View的`onMeasure()`和`onLayout()`方法会被调用，对于它的子View，`onMeasure()`和`onLayout()`方法不一定被调用。
+
+对于draw流程，前面分析过`perform()`方法会调用ViewRootImpl中的`draw()`方法：
+
+**ViewRootImpl的draw方法**
+
+```java
+private boolean draw(boolean fullRedrawNeeded) {
+    // ...
+  	final Rect dirty = mDirty;
+  	// ...
+    if (!dirty.isEmpty() || mIsAnimating || accessibilityFocusDirty) {
+        if (mAttachInfo.mThreadedRenderer != null && mAttachInfo.mThreadedRenderer.isEnabled()) {
+            // ...
+            // 开启了硬件加速
+            mAttachInfo.mThreadedRenderer.draw(mView, mAttachInfo, this, callback);
+        } else {
+            // ...
+            // 关闭了硬件加速
+            if (!drawSoftware(surface, mAttachInfo, xOffset, yOffset,
+                    scalingRequired, dirty, surfaceInsets)) {
+                return false;
+            }
+        }
+    }
+    // ...
+    return useAsyncReport;
+}
+```
+
+dirty指向ViewRootImpl中的一个成员变量mDirty，类型为Rect，在ViewRootImpl的`invalidate()`方法中会调用`set()`方法为其设置四个边界值，由于此时没有调用`invalidate()`方法，因此`mDirty.isEmpty()`返回true，不会执行后面的绘制方法，因此整个View树不会进行重新绘制。不过也有这样一种情况，我们知道在执行VIew的layout流程时会调用`setFrame()`方法，在`setFrame()`方法中有这样的逻辑：
+
+```java
+int oldWidth = mRight - mLeft;
+int oldHeight = mBottom - mTop;
+int newWidth = right - left;
+int newHeight = bottom - top;
+boolean sizeChanged = (newWidth != oldWidth) || (newHeight != oldHeight);
+
+invalidate(sizeChanged);
+```
+
+可以看出当View的宽或高发生改变时会调用`invalidate()`方法，导致View的重新绘制。
+
+最后总结一下`invalidate()`和`requestLayout()`的异同：
+
+**相同点**
+
+* `invalidate()`和`requestLayout()`方法最终都会调用ViewRootImpl的`performTraversals()`方法
+
+**不同点**
+
+* `invalidate()`方法不会执行`measureHierarchy()`和`performLayout()`方法，也就不会执行measure和layout流程，只执行draw流程，如果开启了硬件加速则只进行调用者View的重绘
+* `requestLayout()`方法会依次`measureHierarchy()`、`performLayout()`和`performDraw()`方法，调用者View和它的父级View会重新进行measure、layout，一般情况下不会执行draw流程，子View不一定会重新measure和layout。
+
+综上，当只需要进行重新绘制时就调用`invalidate()`，如果需要重新测量和布局就调用`requestLayout()`，但是`requestLayout()`不保证进行重新绘制，如果要进行重新绘制可以再手动调用`invalidate()`。
+
+下面就以一个简单的例子验证一下上面的几个结论，我定义了两个ViewGroup和一个View，代码很简单，如下所示：
+
+**MyViewGroup1.java**
+
+```java
+public class MyViewGroup1 extends ViewGroup {
+
+    public MyViewGroup1(Context context) {
+        this(context, null);
+    }
+
+    public MyViewGroup1(Context context, AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public MyViewGroup1(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        setWillNotDraw(false);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        Log.e("TAG", "MyViewGroup1执行了onMeasure");
+        measureChildren(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        Log.e("TAG", "MyViewGroup1执行了onLayout");
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+
+            int width = child.getMeasuredWidth();
+            int height = child.getMeasuredHeight();
+
+            child.layout(l, t, l + width, t + height);
+        }
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Log.e("TAG", "MyViewGroup1执行了onDraw");
+        canvas.drawColor(Color.YELLOW);
+    }
+}
+```
+
+**MyViewGroup2.java**
+
+```java
+public class MyViewGroup2 extends ViewGroup {
+
+    public MyViewGroup2(Context context) {
+        this(context, null);
+    }
+
+    public MyViewGroup2(Context context, AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public MyViewGroup2(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        setWillNotDraw(false);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        Log.e("TAG", "MyViewGroup2执行了onMeasure");
+        measureChildren(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        Log.e("TAG", "MyViewGroup2执行了onLayout");
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+
+            int width = child.getMeasuredWidth();
+            int height = child.getMeasuredHeight();
+
+            child.layout(l, t, l + width, t + height);
+        }
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Log.e("TAG", "MyViewGroup2执行了onDraw");
+        canvas.drawColor(Color.GREEN);
+    }
+}
+```
+
+**MyView.java**
+
+```java
+public class MyView extends View {
+
+    public MyView(Context context) {
+        super(context);
+    }
+
+    public MyView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public MyView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        Log.e("TAG", "MyView执行了onMeasure");
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        Log.e("TAG", "MyView执行了onLayout");
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Log.e("TAG", "MyView执行了onDraw");
+        canvas.drawColor(Color.RED);
+    }
+}
+```
+
+为了保证ViewGroup的`onDraw()`方法执行，我在构造方法中调用了`setWillNotDraw(false)`。布局文件也很简单，一个三级的嵌套：
+
+**activity_test.xml**
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.MyViewGroup1 xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/myViewGroup1"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.example.MyViewGroup2
+        android:id="@+id/myViewGroup2"
+        android:layout_width="300dp"
+        android:layout_height="300dp">
+
+        <com.example.MyView
+            android:id="@+id/myView"
+            android:layout_width="200dp"
+            android:layout_height="200dp" />
+
+    </com.example.MyViewGroup2>
+
+</com.example.MyViewGroup1>
+```
+
+运行后的效果如下：
+
+![](http://tva1.sinaimg.cn/large/007X8olVly1g6td2uu24ij305k0c1glk.jpg)
+
+我给三个View添加了点击事件，点击后分别调用自身的`invalidate()`或`requestLayout()`方法，下面分情况看一下。
+
+* 调用`invalidate()`方法
+
+**开启硬件加速**
+
+调用MyView的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td3xg644j304s00p0sh.jpg)
+
+调用MyViewGroup2的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td4ml3v3j306d00r741.jpg)
+
+调用MyViewGroup1的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td54xcynj306g00v741.jpg)
+
+**关闭硬件加速**
+
+调用MyView的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td5ichncj306n01rq2q.jpg)
+
+
+
+调用MyViewGroup2的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td5ichncj306n01rq2q.jpg)
+
+
+
+调用MyViewGroup1的`invalidate()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td5ichncj306n01rq2q.jpg)
+
+可以看出，关闭硬件加速时，调用任何一个View的`invalidate()`方法都会导致整个View树的重新绘制；开启硬件加速时，调用哪一个View的`invalidate()`方法就会重绘哪一个View。`invalidate()`方法不会导致`onMeasure()`和`onLayout()`被调用。
+
+* 调用`requestLayout()`方法
+
+**开启硬件加速**
+
+调用MyView的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td604gmgj307w03ojr9.jpg)
+
+调用MyViewGroup2的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td6ffabcj307o02dweb.jpg)
+
+调用MyViewGroup1的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td6ovqtuj307g0183ya.jpg)
+
+**关闭硬件加速**
+
+调用MyView的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td604gmgj307w03ojr9.jpg)
+
+调用MyViewGroup2的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td6ffabcj307o02dweb.jpg)
+
+调用MyViewGroup1的`requestLayout()`方法：![](http://tva1.sinaimg.cn/large/007X8olVly1g6td6ovqtuj307g0183ya.jpg)
+
+可以看出此时是否开启硬件加速对于`requestLayout()`方法的调用流程没有影响，调用View的`requestLayout()`方法会导致自身及其父View的`onMeasure()`和`onLayout()`方法被调用，并不会调用`onDraw()`方法进行重绘，当然前面也分析过了，`onDraw()`方法不是一定不会被调用，当View重新绘制时硬件加速的作用就会有所体现了。
 
 ## 4.个人目前的一些疑问
 
 ### 4.1.setContentView()方法只能在onCreate()中调用吗
 
-
-
 ### 4.2.AppCompatActivity布局层级更深的原因
-
-
-
-
-
