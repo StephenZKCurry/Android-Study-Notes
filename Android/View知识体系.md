@@ -2276,7 +2276,7 @@ protected void onDraw(Canvas canvas) {
 
 View的内部本身提供了post系列的方法，完全可以替代Handler的作用，除非很明确地需要Handler来发送消息。
 
-### 2.4. 防止内存泄漏
+### 2.4.防止内存泄漏
 
 当View退出或不可见时需要及时停止线程和动画，否则可能会导致内存泄漏。可以在`onDetachedFromWindow()`方法中来处理，当包含此View的Activity退出或当前View被remove时会被调用。与此方法对应的是`onAttachedToWindow()` ，该方法会在包含此View的Activity启动时被调用。
 
