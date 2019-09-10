@@ -12,6 +12,7 @@
 - [Activity启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Activity%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)
 - [App启动流程](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/App%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B.md)
 - [LayoutInflate的使用](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/LayoutInflate%E7%9A%84%E4%BD%BF%E7%94%A8.md)
+- [View知识体系](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/View%E7%9F%A5%E8%AF%86%E4%BD%93%E7%B3%BB.md)
 - [Android 6.0-9.0适配指南](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Android%206.0-9.0%E9%80%82%E9%85%8D%E6%8C%87%E5%8D%97.md)
 - [Android刘海屏适配方案总结](https://www.jianshu.com/p/8ead0701d8ef)
 - [Gradle相关操作](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Android/Gradle%E7%9B%B8%E5%85%B3%E6%93%8D%E4%BD%9C.md)
