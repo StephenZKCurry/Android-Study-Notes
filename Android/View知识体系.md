@@ -1,6 +1,51 @@
 # View知识体系
 
-[TOC]
+## 目录
+
+- [1.View的工作原理](#1view的工作原理)
+  * [1.1.几个相关类](#11几个相关类)
+    + [1.1.1.Window和WindowManager](#111window和windowmanager)
+    + [1.1.2.DecorView](#112decorview)
+    + [1.1.3.ViewRoot](#113viewroot)
+  * [1.2.准备阶段](#12准备阶段)
+    + [1.2.1.Window的创建](#121window的创建)
+    + [1.2.2.DecorView的创建](#122decorview的创建)
+    + [1.2.3.三大流程的调用](#123三大流程的调用)
+  * [1.3.measure](#13measure)
+    + [1.3.1.MeasureSpec](#131measurespec)
+      - [1.3.1.1.MeasureSpec简介](#1311measurespec简介)
+      - [1.3.1.2.如何确定MeasureSpec的值](#1312如何确定measurespec的值)
+    + [1.3.2.LayoutParams](#132layoutparams)
+      - [1.3.2.1.LayoutParams简介](#1321layoutparams简介)
+      - [1.3.2.2.View的LayoutParams属性是何时设置的](#1322view的layoutparams属性是何时设置的)
+      - [1.3.2.3.自定义LayoutParams须知](#1323自定义layoutparams须知)
+    + [1.3.3.measure流程](#133measure流程)
+      - [1.3.3.1.单一View的measure流程](#1331单一view的measure流程)
+      - [1.3.3.2.ViewGroup的measure流程](#1332viewgroup的measure流程)
+    + [1.3.4.补充介绍](#134补充介绍)
+      - [1.3.4.1.MeasureSpec.UNSPECIFIED的应用](#1341measurespecunspecified的应用)
+  * [1.4.layout](#14layout)
+    + [1.4.1.单一View的layout流程](#141单一view的layout流程)
+    + [1.4.2.ViewGroup的layout流程](#142viewgroup的layout流程)
+    + [1.4.3.getMeasureWidth/getMeasureHeight和getWidth/getHeight的区别](#143getmeasurewidth/getmeasureheight和getwidth/getheight的区别)
+  * [1.5.draw](#15draw)
+    + [1.5.1.单一View的draw流程](#151单一view的draw流程)
+    + [1.5.2.ViewGroup的draw流程](#152viewgroup的draw流程)
+    + [1.5.3.ViewGroup的draw()方法调用问题](#153viewgroup的draw()方法调用问题)
+- [2.自定义View须知](#2自定义view须知)
+  * [2.1.支持wrap_content](#21支持wrap-content)
+  * [2.2.支持padding](#22支持padding)
+  * [2.3.避免使用Handler](#23避免使用handler)
+  * [2.4. 防止内存泄漏](#24防止内存泄漏)
+  * [2.5.处理好滑动冲突](#25处理好滑动冲突)
+- [3.开发中的常见问题](#3开发中的常见问题)
+  * [3.1.View获取宽高](#31view获取宽高)
+  * [3.2.invalidate和requestLayout的区别](#32invalidate和requestlayout的区别)
+    + [3.2.1.invalidate](#321invalidate)
+    + [3.2.2.requestLayout](#322requestlayout)
+- [4.个人目前的一些疑问](#4个人目前的一些疑问)
+  * [4.1.setContentView()方法只能在onCreate()中调用吗](#41setcontentview()方法只能在oncreate()中调用吗)
+  * [4.2.AppCompatActivity布局层级更深的原因](#42appcompatactivity布局层级更深的原因)
 
 > **前言**
 >
@@ -2243,9 +2288,104 @@ View的内部本身提供了post系列的方法，完全可以替代Handler的�
 
 ### 3.1.View获取宽高
 
-根据此前的分析，View的三大流程都是在`onResume()`方法调用之后才开始的，因此在`onCreate()`、`onStart()`和`onResume()`方法中是无法通过`getWidth()`/`getHeight()`获取到View的宽高的。如果在开发中有这样的需求应该怎么办呢，当然还是有办法的，下面就以在`onCreate()`方法中获取View的宽高为例，介绍几种可行的方法。
+根据此前的分析，View的三大流程都是在`onResume()`方法调用之后才开始的，因此在`onCreate()`、`onStart()`和`onResume()`方法中是无法通过`getWidth()`/`getHeight()`获取到View的宽高的。如果在开发中有这样的需求应该怎么办呢，当然还是有办法的，下面就介绍几种通过代码获取View宽高的方法。
 
+* 在`onWindowFocusChanged()`方法中获取
 
+重写Activity的`onWindowFocusChanged()`方法，在方法内部可以获取到View的宽高。
+
+```java
+@Override
+public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    if (hasFocus) {
+        int width = view.getWidth();
+        int height = view.getHeight();
+        Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+    }
+}
+```
+
+需要注意，该方法在Activity获得和失去焦点时都会被调用，因此会被调用多次，不推荐采用这种方法获取View的宽高。
+
+* 使用ViewTreeObserver监听事件
+
+**ViewTreeObserver**中定义了多种监听事件，可以通过设置**OnGlobalLayoutListener**（当View树的状态发生改变或者View树内部的View的可见状态发生改变时会回调`onGlobalLayout()`方法）和**OnPreDrawListener**（当View树被绘制之前会回调`onPreDraw()`方法）监听，在回调方法中获取View的宽高。需要注意，回调方法可能会被执行多次，因此在获取到View的宽高后需要移除监听器。
+
+```java
+ViewTreeObserver observer = view.getViewTreeObserver();
+observer.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+    @Override
+    public void onGlobalLayout() {
+        view.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+        int width = view.getWidth();
+        int height = view.getHeight();
+        Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+    }
+});
+
+observer.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+    @Override
+    public boolean onPreDraw() {
+        view.getViewTreeObserver().removeOnPreDrawListener(this);
+        int width = view.getWidth();
+        int height = view.getHeight();
+        Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+        return false;
+    }
+});
+```
+
+* 手动调用View的`measure()`方法
+
+我们可以在measure流程开始之前手动调用View的`measure()`方法来提前进行测量，需要构造出宽高的**MeasureSpec**，这里就要分情况了。
+
+**1.LayoutParams指定宽/高为match_parent**
+
+根据之前的分析，此种情况下VIew的测量尺寸应该为parentSize，即父View可用空间大小，这个值我们是不知道的，因此无法构造出MeasureSpec，不能使用`measure()`方法进行测量。
+
+**1.LayoutParams指定宽/高为wrap_content**
+
+这种情况下View的测量模式为**AT_MOST**，测量尺寸可以指定为MeasureSpec的最大值，即2^30-1（(1<<30)-1）。
+
+```java
+int widthMeasureSpec = View.MeasureSpec.makeMeasureSpec((1 << 30) - 1, View.MeasureSpec.AT_MOST);
+int heightMeasureSpec = View.MeasureSpec.makeMeasureSpec((1 << 30) - 1, View.MeasureSpec.AT_MOST);
+view.measure(widthMeasureSpec, heightMeasureSpec);
+int width = view.getMeasuredWidth();
+int height = view.getMeasuredHeight();
+Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+```
+
+**1.LayoutParams指定宽/高为精确尺寸**
+
+这种情况下View的测量模式为**EXACTLY**，测量尺寸就是我们指定的值。
+
+```java
+int widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY);
+int heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY);
+view.measure(widthMeasureSpec, heightMeasureSpec);
+int width = view.getMeasuredWidth();
+int height = view.getMeasuredHeight();
+Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+```
+
+* 使用View的`post()`方法
+
+这个方法可以说是我们最熟悉的了，调用View的`post()`方法，传入一个Runnable对象，在`run()`方法中获取View的宽高。
+
+```java
+view.post(new Runnable() {
+    @Override
+    public void run() {
+        int width = view.getWidth();
+        int height = view.getHeight();
+        Log.e("TAG", "view的宽度为：" + width + ",高度为：" + height);
+    }
+});
+```
+
+简单解释一下原理，其实`post()`方法内部是通过Handler来实现的，调用`post()`方法后会将Runnable封装成一个同步消息添加到主线程的消息队列中，由于ViewRootImpl的`scheduleTraversals()`方法内部通过开启同步屏障机制发送了一条异步消息进行View树的measure、layout和draw，因此保证了View树的三大流程执行完成后再执行消息队列中的同步消息，此时当然就可以获取到View的宽高了。
 
 ### 3.2.invalidate和requestLayout的区别
 
