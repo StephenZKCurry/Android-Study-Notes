@@ -552,7 +552,7 @@ protected void onCreate(@Nullable Bundle savedInstanceState) {
 protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
     switch (requestCode) {
-        case 1:
+        case 2:
             if (resultCode == RESULT_OK) {
               	// 再次判断权限是否已获取
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

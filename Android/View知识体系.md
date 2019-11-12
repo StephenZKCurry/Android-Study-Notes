@@ -2462,7 +2462,7 @@ void invalidateInternal(int l, int t, int r, int b, boolean invalidateCache,
 * 没有设置**PFLAG_INVALIDATED**标志位，即没有被重绘过
 * fullInvalidate为true并且透明度发生了变化
 
-接下来判断如果invalidateCache为true，就设置**PFLAG_INVALIDATED**标志位，这一步很重要，后面还会提到，通过上面的调用也能看出这里的invalidateCache传入的值为true，因此会设置这个标志位。方法的最后会调用mParent即父View的`invalidateChild()`方法，将要重绘的区域damage传递给父View。接下里我们来看ViewGroup的`invalidateChild()`方法：
+接下来判断如果invalidateCache为true，就给View设置**PFLAG_INVALIDATED**标志位，这一步很重要，后面还会提到，通过上面的调用也能看出这里的invalidateCache传入的值为true，因此会设置这个标志位。方法的最后会调用mParent即父View的`invalidateChild()`方法，将要重绘的区域damage传递给父View。下面我们来看ViewGroup的`invalidateChild()`方法：
 
 **ViewGroup的invalidateChild方法**
 
@@ -2492,7 +2492,7 @@ public final void invalidateChild(View child, final Rect dirty) {
 }
 ```
 
-方法内部首先会判断是否开启了硬件加速，接下来我们就分别看一下开启和关闭硬件加速的情况下重绘流程时怎样的。
+方法内部首先会判断是否开启了硬件加速，接下来我们分别看一下关闭和开启硬件加速情况下的重绘流程。
 
 * 关闭硬件加速
 
@@ -2531,7 +2531,7 @@ public void setView(View view, WindowManager.LayoutParams attrs, View panelParen
 }
 ```
 
-可以发现方法执行了`view.assignParent(this)`，由于mView就是DecorView，因此这里的view也是DecorView，我们来看一下`assignParent()`方法，它定义在View中：
+可以发现方法执行了`view.assignParent(this)`，这里的view其实就是DecorView（ActivityThread的`handleResumeActivity()`方法中调用`wm.addView()`传过来的），我们来看一下`assignParent()`方法，它定义在View中：
 
 **View的assignParent方法**
 
@@ -2740,7 +2740,7 @@ private void recreateChildDisplayList(View child) {
 }
 ```
 
-`dispatchGetDisplayList()`方法内部会遍历子View，依次调用`recreateChildDisplayList()`方法，不难看出`recreateChildDisplayList()`方法和`updateViewTreeDisplayList()`方法很像，接下来同样会调用`updateDisplayListIfDirty()`方法，对于没有设置**PFLAG_INVALIDATED**标志位的View，它的mRecreateDisplayList值为false，会重复上面的过程，即调用`dispatchGetDisplayList()`方法；而对于调用了`invalidate()`方法的View，由于设置了**PFLAG_INVALIDATED**标志位，它的mRecreateDisplayList值为true，会执行`updateDisplayListIfDirty()`方法最后的重绘逻辑，即调用`执行dispatchDraw()`方法或者`draw()`方法完成自身及子View的绘制。
+`dispatchGetDisplayList()`方法内部会遍历子View，依次调用`recreateChildDisplayList()`方法，不难看出`recreateChildDisplayList()`方法和`updateViewTreeDisplayList()`方法很像，接下来同样会调用`updateDisplayListIfDirty()`方法，对于没有设置**PFLAG_INVALIDATED**标志位的View，它的mRecreateDisplayList值为false，会重复上面的过程，即调用`dispatchGetDisplayList()`方法；而对于调用了`invalidate()`方法的View，由于设置了**PFLAG_INVALIDATED**标志位，它的mRecreateDisplayList值为true，会执行`updateDisplayListIfDirty()`方法最后的重绘逻辑，即调用`dispatchDraw()`方法或者`draw()`方法完成自身及子View的绘制。
 
 最后总结一下`invalidate()`方法，调用View的`invalidate()`方法后会逐级调用父View的方法，最终导致ViewRootImpl的`scheduleTraversals()`方法被调用，进而调用`performTraversals()`方法。由于mLayoutRequested的值为false，因此不会执行measure和layout流程，只执行draw流程。draw流程的执行过程和是否开启硬件加速有关：
 
@@ -2880,7 +2880,7 @@ public void layout(int l, int t, int r, int b) {
 
 结合上面的分析可以得出结论，当View调用了`requestLayout()`方法后，自身及父级View的`onMeasure()`和`onLayout()`方法会被调用，对于它的子View，`onMeasure()`和`onLayout()`方法不一定被调用。
 
-对于draw流程，前面分析过`perform()`方法会调用ViewRootImpl中的`draw()`方法：
+对于draw流程，前面分析过`performDraw()`方法会调用ViewRootImpl中的`draw()`方法：
 
 **ViewRootImpl的draw方法**
 
