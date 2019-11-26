@@ -2,6 +2,8 @@
 
 [TOC]
 
+## 1.图片加载原理
+
 **Glide**是Android开发中最常用的图片加载框架之一，使用起来很简单，只需要以下三步即可将图片加载到ImageVIew上：
 
 ```java
@@ -15,7 +17,7 @@ Glide
 
 本文是跟着郭霖大神的博客[Android图片加载框架最全解析（二），从源码的角度理解Glide的执行流程](https://blog.csdn.net/guolin_blog/article/details/53939176)一步一步分析的，对应的Glide版本为3.7.0，对于我来说光是对照着文章看源码有一种很强的催眠效果，因此需要亲自记录一下整个分析的过程，也学习一下郭神的源码分析思路。
 
-##  1.with()方法
+### 1.1.with()方法
 
 **Glide的with()方法**
 
@@ -190,7 +192,7 @@ SupportRequestManagerFragment getSupportRequestManagerFragment(final FragmentMan
 
 总结一下Glide的`with()`方法，返回一个RequestManager对象，具体地，如果参数传入了ApplicationContext或者当前线程不为主线程，Glide和整个应用的生命周期同步，应用关闭后Glide停止加载；如果参数传入了Activity或Fragment，Glide与当前所在Activity的生命周期同步，采用添加一个透明Fragment的方式保证了Activity退出后Glide停止加载图片。
 
-## 2.load()方法
+### 1.2.load()方法
 
 通过`with()`方法我们已经得到RequestManager对象，接下来我们就来看一下RequestManager的`load()`方法，由于`load()`方法有多个重载方法，可以加载不同类型的图片资源，这里就不一一分析了，以传入图片路径url为例，我们只看传入参数为String类型的情况。
 
@@ -249,7 +251,7 @@ public DrawableRequestBuilder<ModelType> load(ModelType model) {
 
 `load()`方法分析到这里就差不多了，好吧，其实也没多分析什么o(╥﹏╥)o，我们，目前只需要知道`load()`方法返回了DrawableTypeRequest对象就可以了。
 
-## 3.into()方法
+### 1.3.into()方法
 
 上一步`load()`方法获取到了一个DrawableTypeRequest对象，我们接着来看它的`into()`方法。DrawableTypeRequest类中是没有定义`into()`方法的，我们来看它的父类DrawableRequestBuilder：
 
@@ -1330,7 +1332,7 @@ protected void setResource(GlideDrawable resource) {
 
 4.创建**GenericRequest**对象，调用`begin()`方法开始图片加载流程
 
-5.创建**EngineRunnable**，负责图片加载任务
+5.创建**EngineRunnable**，负责图片加载任务，使用线程池执行该任务
 
 6.使用**HttpURLConnection**请求网络图片资源，获取到流InputStream
 
@@ -1343,6 +1345,376 @@ Bitmap→Resource<Bitmap>→GifBitmapWrapper(包装Resource<Bitmap>和Resource<G
 9.将**Resource<GifBitmapWrapper>**转换为**Resource<GlideDrawable>**
 
 10.获取**GlideDrawable**对象，显示到ImageView上
+
+## 2.Glide是如何感知生命周期的
+
+在上面的分析中提到过Glide通过添加一个透明的Fragment实现生命周期的同步，保证了在页面退出后图片也停止加载，那么这是如何做到的呢，我们下面就来具体看一下。首先回到Glide的`with()`方法，这里以参数传入Activity的为例：
+
+```java
+public static RequestManager with(Activity activity) {
+    RequestManagerRetriever retriever = RequestManagerRetriever.get();
+    return retriever.get(activity);
+}
+```
+
+方法最后调用了**RequestManagerRetriever**的`get()`方法创建出了**RequestManager**对象并返回，我们来看一下这个方法：
+
+```java
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+public RequestManager get(Activity activity) {
+    if (Util.isOnBackgroundThread() || Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
+        return get(activity.getApplicationContext());
+    } else {
+        assertNotDestroyed(activity);
+        android.app.FragmentManager fm = activity.getFragmentManager();
+        return fragmentGet(activity, fm);
+    }
+}
+
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+RequestManager fragmentGet(Context context, android.app.FragmentManager fm) {
+  	// 获取RequestManagerFragment
+    RequestManagerFragment current = getRequestManagerFragment(fm);
+    RequestManager requestManager = current.getRequestManager();
+    if (requestManager == null) {
+        requestManager = new RequestManager(context, current.getLifecycle(), current.getRequestManagerTreeNode());
+        current.setRequestManager(requestManager);
+    }
+    return requestManager;
+}
+```
+
+`get()`方法内部首先获取到当前Activity的**FragmentManager**对象，然后调用了`fragmentGet()`方法。`fragmentGet()`方法中首先调用了`getRequestManagerFragment()`方法获取到**RequestManagerFragment**。
+
+```java
+/** Pending adds for RequestManagerFragments. */
+final Map<android.app.FragmentManager, RequestManagerFragment> pendingRequestManagerFragments =
+        new HashMap<android.app.FragmentManager, RequestManagerFragment>();
+
+@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
+RequestManagerFragment getRequestManagerFragment(final android.app.FragmentManager fm) {
+  // 通过TAG获取到添加的RequestManagerFragment 
+  RequestManagerFragment current = (RequestManagerFragment) fm.findFragmentByTag(FRAGMENT_TAG);
+    if (current == null) {
+      	// 没有添加RequestManagerFragment，从pendingRequestManagerFragments中获取
+        current = pendingRequestManagerFragments.get(fm);
+        if (current == null) {
+          	// pendingRequestManagerFragments中也没有RequestManagerFragment，新创建一个
+            current = new RequestManagerFragment();
+          	// 添加到pendingRequestManagerFragments中
+            pendingRequestManagerFragments.put(fm, current);
+          	// 将RequestManagerFragment添加到当前Activity中
+            fm.beginTransaction().add(current, FRAGMENT_TAG).commitAllowingStateLoss();
+          	// 将RequestManagerFragment从pendingRequestManagerFragments中移除
+            handler.obtainMessage(ID_REMOVE_FRAGMENT_MANAGER, fm).sendToTarget();
+        }
+    }
+    return current;
+}
+```
+
+这里我们一步一步来分析，首先通过TAG获取到当前Activity中添加的RequestManagerFragment，如果为null说明当前Activity中还没有添加RequestManagerFragment。接下来再从**pendingRequestManagerFragments**中获取RequestManagerFragment，pendingRequestManagerFragments是一个Map，key值为FragmentManager，value值为RequestManagerFragment，从注释中也能大概看出它的作用是保存将要添加的RequestManagerFragment对象，我们这里只研究首次加载图片的情况，因此pendingRequestManagerFragments中还没有添加RequestManagerFragment，这里取到的Fragment对象也为null。下面就会创建一个RequestManagerFragment对象，将它添加到pendingRequestManagerFragments中，接着调用`commitAllowingStateLoss()`方法将RequestManagerFragment添加到当前Activity中，最后使用Handler发送一条消息，我们来看一下关于消息的处理。
+
+```java
+@Override
+public boolean handleMessage(Message message) {
+    // ...
+    switch (message.what) {
+        case ID_REMOVE_FRAGMENT_MANAGER:
+            android.app.FragmentManager fm = (android.app.FragmentManager) message.obj;
+            key = fm;
+            removed = pendingRequestManagerFragments.remove(fm);
+            break;
+        // ...
+        default:
+            handled = false;
+    }
+    // ...
+}
+```
+
+可以看到这里又将RequestManagerFragment从pendingRequestManagerFragments中移除了，为什么要这么做呢，我这里简单说一下，我们经常使用的`add()`、`remove()`、`show()`、`hide()`等方法都是将对应的操作封装为一个Op对象，调用`commit()`或`commitAllowingStateLoss()`方法时再根据Op对象执行对应的操作，最终是通过Handler发送消息来处理的，而我们知道消息是保存在一个消息队列中按顺序执行的，因此当Handler处理**ID_REMOVE_FRAGMENT_MANAGER**消息时RequestManagerFragment已经添加到了Activity中，前面也说过这个pendingRequestManagerFragments保存的是**将要**添加的Fragment，因此这里的操作就解释得通了。上面的解释其实更多第是从代码执行的角度来分析，那么这个pendingRequestManagerFragments设计的真正目的是什么呢？答案就是为了防止RequestManagerFragment的重复添加，我们可以设想一下下面这种情况，当在同一个Activity中连续执行两次图片加载：
+
+```java
+Glide.with(this).load("url").into(imageView);
+Glide.with(this).load("url").into(imageView);
+```
+
+如果第一次加载图片时以及执行了`commitAllowingStateLoss()`方法但还未将RequestManagerFragment添加到Activity中，第二次加载执行到`getRequestManagerFragment()`中的的第一个if时通过TAG获取到的RequestManagerFragment当然为null，接下来如果不判断pendingRequestManagerFragments中是否添加了Fragment，肯定会导致Fragment的重复添加，因此pendingRequestManagerFragments的作用就在于此，根本原因就是由于Fragment的添加是一个异步过程。
+
+好了，上面有点扯得远了，我们回到`fragmentGet()`方法，下面再贴一遍代码：
+
+```java
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+RequestManager fragmentGet(Context context, android.app.FragmentManager fm) {
+  	// 获取RequestManagerFragment
+    RequestManagerFragment current = getRequestManagerFragment(fm);
+    RequestManager requestManager = current.getRequestManager();
+    if (requestManager == null) {
+        requestManager = new RequestManager(context, current.getLifecycle(), current.getRequestManagerTreeNode());
+        current.setRequestManager(requestManager);
+    }
+    return requestManager;
+}
+```
+
+这时已经将RequestManagerFragment添加到了Activity中。接下来会调用RequestManagerFragment的`getRequestManager()`方法获取到RequestManagerFragment中定义的成员变量requestManager，它的类型为RequestManager，首次添加的RequestManagerFragment还没有为该变量赋值，因此这里获取到的requestManager为null，会创建出一个RequestManager对象，然后调用`setRequestManager()`方法为RequestManagerFragment中的成员变量requestManager赋值。
+
+我们注意到在创建RequestManager时传入了一个参数`current.getLifecycle()`，这个参数看样子就和生命周期相关了，我们来看一下RequestManagerFragment，它定义了一个成员变量lifecycle，类型为**ActivityFragmentLifecycle**，通过`getLifecycle()`方法获取到的就是这个lifecycle。
+
+```java
+public class RequestManagerFragment extends Fragment {
+    
+    private final ActivityFragmentLifecycle lifecycle;
+    // ...
+
+    public RequestManagerFragment() {
+        this(new ActivityFragmentLifecycle());
+    }
+    
+    RequestManagerFragment(ActivityFragmentLifecycle lifecycle) {
+        this.lifecycle = lifecycle;
+    }
+
+    ActivityFragmentLifecycle getLifecycle() {
+        return lifecycle;
+    }
+
+    // ...
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        lifecycle.onStart();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        lifecycle.onStop();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        lifecycle.onDestroy();
+    }
+    // ...
+}
+```
+
+我们再来看一下**ActivityFragmentLifecycle**的定义：
+
+```java
+class ActivityFragmentLifecycle implements Lifecycle {
+    private final Set<LifecycleListener> lifecycleListeners =
+            Collections.newSetFromMap(new WeakHashMap<LifecycleListener, Boolean>());
+    private boolean isStarted;
+    private boolean isDestroyed;
+
+    @Override
+    public void addListener(LifecycleListener listener) {
+        lifecycleListeners.add(listener);
+
+        if (isDestroyed) {
+            listener.onDestroy();
+        } else if (isStarted) {
+            listener.onStart();
+        } else {
+            listener.onStop();
+        }
+    }
+
+    void onStart() {
+        isStarted = true;
+        for (LifecycleListener lifecycleListener : Util.getSnapshot(lifecycleListeners)) {
+            lifecycleListener.onStart();
+        }
+    }
+
+    void onStop() {
+        isStarted = false;
+        for (LifecycleListener lifecycleListener : Util.getSnapshot(lifecycleListeners)) {
+            lifecycleListener.onStop();
+        }
+    }
+
+    void onDestroy() {
+        isDestroyed = true;
+        for (LifecycleListener lifecycleListener : Util.getSnapshot(lifecycleListeners)) {
+            lifecycleListener.onDestroy();
+        }
+    }
+}
+```
+
+ActivityFragmentLifecycle中定义了一个Set，保存所有的**LifecycleListener**，即生命周期监听者，使用`addListener()`方法可以添加LifecycleListener。ActivityFragmentLifecycle中定义了三个生命周期相关的方法：`onStart()`、`onStop()`和`onDestory()`，在RequestManagerFragment的生命周期方法中会调用相应的方法，循环遍历所有添加的LifecycleListener，执行相应的回调方法。
+
+我们再来看一下RequestManager的构造方法，看看传入的lifecycle是怎么使用的。
+
+```java
+public RequestManager(Context context, Lifecycle lifecycle, RequestManagerTreeNode treeNode) {
+    this(context, lifecycle, treeNode, new RequestTracker(), new ConnectivityMonitorFactory());
+}
+
+RequestManager(Context context, final Lifecycle lifecycle, RequestManagerTreeNode treeNode,
+               RequestTracker requestTracker, ConnectivityMonitorFactory factory) {
+    this.context = context.getApplicationContext();
+    this.lifecycle = lifecycle;
+    this.treeNode = treeNode;
+    this.requestTracker = requestTracker;
+    this.glide = Glide.get(context);
+    this.optionsApplier = new OptionsApplier();
+
+    // ...
+    if (Util.isOnBackgroundThread()) {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                lifecycle.addListener(RequestManager.this);
+            }
+        });
+    } else {
+        lifecycle.addListener(this);
+    }
+    // ...
+}
+```
+
+构造方法内部调用了lifecycle的`addListener()`方法，参数传入了this，这是因为RequestManager实现了LifecycleListener，到这里其实思路就很清楚了，当Activity不可见或销毁时，添加的RequestManagerFragment也会执行相应的生命周期方法（`onStop()`/`onDestory()`），进而会执行LifecycleListener的回调方法（`onStop()`/`onDestory()`），也就是RequestManager中定义的回调方法，在这里进行图片加载的处理（暂停或取消），这样就实现了生命周期的感知。接下来我们来看一下RequestManager中定义的回调方法，验证一下上面的思路。
+
+```java
+public class RequestManager implements LifecycleListener {
+
+    // ...
+    private final Lifecycle lifecycle;
+    // ...
+    private final RequestTracker requestTracker;
+    // ...
+
+    public RequestManager(Context context, Lifecycle lifecycle, RequestManagerTreeNode treeNode) {
+        this(context, lifecycle, treeNode, new RequestTracker(), new ConnectivityMonitorFactory());
+    }
+
+    RequestManager(Context context, final Lifecycle lifecycle, RequestManagerTreeNode treeNode,
+                   RequestTracker requestTracker, ConnectivityMonitorFactory factory) {
+        this.context = context.getApplicationContext();
+        this.lifecycle = lifecycle;
+        this.treeNode = treeNode;
+        this.requestTracker = requestTracker;
+        this.glide = Glide.get(context);
+        this.optionsApplier = new OptionsApplier();
+
+        // ...
+        if (Util.isOnBackgroundThread()) {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    lifecycle.addListener(RequestManager.this);
+                }
+            });
+        } else {
+            lifecycle.addListener(this);
+        }
+        // ...
+    }
+
+    // ...
+    
+    @Override
+    public void onStart() {
+        resumeRequests();
+    }
+
+  
+    @Override
+    public void onStop() {
+        pauseRequests();
+    }
+
+    @Override
+    public void onDestroy() {
+        requestTracker.clearRequests();
+    }
+
+    public void resumeRequests() {
+        Util.assertMainThread();
+        requestTracker.resumeRequests();
+    }
+    
+    public void pauseRequests() {
+        Util.assertMainThread();
+        requestTracker.pauseRequests();
+    }
+    // ...
+}
+```
+
+在`onStop()`和`onDestory()`方法中会调用requestTracker的`pauseRequests()`和`clearRequests()`方法，requestTracker的类型为**RequestTracker**，我们接下来这个类：
+
+```java
+public class RequestTracker {
+
+    private final Set<Request> requests = Collections.newSetFromMap(new WeakHashMap<Request, Boolean>());
+    // ...
+
+    public void runRequest(Request request) {
+        requests.add(request);
+        if (!isPaused) {
+            request.begin();
+        } else {
+            pendingRequests.add(request);
+        }
+    }
+
+    void addRequest(Request request) {
+        requests.add(request);
+    }
+
+    public void pauseRequests() {
+        isPaused = true;
+        for (Request request : Util.getSnapshot(requests)) {
+            if (request.isRunning()) {
+                request.pause();
+                pendingRequests.add(request);
+            }
+        }
+    }
+
+    public void clearRequests() {
+        for (Request request : Util.getSnapshot(requests)) {
+            request.clear();
+        }
+        pendingRequests.clear();
+    }
+
+    // ...
+}
+```
+
+RequestTracker中定义了一个Set保存所有图片加载的Request，不难看出`pauseRequests()`方法和`clearRequests()`方法内部都是遍历所有的Request，调用`pause()`或`clear()`方法来在暂停或取消图片加载。添加Request的地方我们此前也分析过，就是在**GenericRequestBuilder**的`into(Y target)`方法中，创建出Request对象后，调用了RequestTracker的`runRequest()`方法，在方法内部将Request对象添加到了requests中。
+
+总结一下Glide生命周期感知的原理，通过添加一个透明的Fragment来同步当前Activity的生命周期，在Fragment中注册LifecycleListener（也就是RequestManager），在生命周期方法中会调用LifecycleListener的回调方法，因此RequestManager就实现了生命周期的感知，实现图片加载的暂停和取消。
+
+## 3.缓存分析
+
+Glide的缓存机制可以分为两层：内存缓存和磁盘缓存。内存缓存和磁盘缓存的作用都是为了防止重复从网络或其他地方下载图片，区别在于缓存的位置，顾名思义，内存缓存是将图片缓存在应用内存中，磁盘缓存是将图片缓存到手机磁盘中。
+
+### 3.1.内存缓存
+
+弱引用和LruCache，正在使用的图片使用弱引用机制进行缓存，不在使用中的图片使用LruCache来进行缓存。
+
+**LruResourceCache** cache
+
+**HashMap<Key, WeakReference<EngineResource<?>>>** activeResources
+
+
+
+### 3.2.磁盘缓存
+
+
+
+
 
 
 
