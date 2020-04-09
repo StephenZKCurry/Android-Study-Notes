@@ -27,7 +27,8 @@
 
 ### Kotlin
 
-
+* [Kotlin中的几个标准函数](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Kotlin/Kotlin%E4%B8%AD%E7%9A%84%E5%87%A0%E4%B8%AA%E6%A0%87%E5%87%86%E5%87%BD%E6%95%B0.md)
+* [Kotlin中的几种内部类](https://github.com/StephenZKCurry/Android-Study-Notes/blob/master/Kotlin/Kotlin%E4%B8%AD%E7%9A%84%E5%87%A0%E7%A7%8D%E5%86%85%E9%83%A8%E7%B1%BB.md)
 
 ### 移动跨平台
 
