@@ -1,8 +1,8 @@
-# Glide源码分析
+# Glide原理分析
 
 [TOC]
 
-## 1.图片加载原理
+## 1.图片加载流程
 
 **Glide**是Android开发中最常用的图片加载框架之一，使用起来很简单，只需要以下三步即可将图片加载到ImageVIew上：
 
@@ -1195,7 +1195,7 @@ public void onSizeReady(int width, int height) {
 }
 ```
 
-我们会发现调用方法时cb参数传入了this，再来看GenericRequest类的定义，原来它实现了ResourceCallback接口，因此就是一个ResourceCallback对象，我们找到GenericRequest中重写的`onException()`方法，
+我们会发现调用方法时cb参数传入了this，再来看GenericRequest类的定义，原来它实现了ResourceCallback接口，因此就是一个ResourceCallback对象，我们找到GenericRequest中重写的`onException()`方法：
 
 ```java
 @Override
@@ -1350,6 +1350,8 @@ Bitmap→Resource<Bitmap>→GifBitmapWrapper(包装Resource<Bitmap>和Resource<G
 
 在上面的分析中提到过Glide通过添加一个透明的Fragment实现生命周期的同步，保证了在页面退出后图片也停止加载，那么这是如何做到的呢，我们下面就来具体看一下。首先回到Glide的`with()`方法，这里以参数传入Activity的为例：
 
+**Glide的with()方法**
+
 ```java
 public static RequestManager with(Activity activity) {
     RequestManagerRetriever retriever = RequestManagerRetriever.get();
@@ -1385,6 +1387,8 @@ RequestManager fragmentGet(Context context, android.app.FragmentManager fm) {
 ```
 
 `get()`方法内部首先获取到当前Activity的**FragmentManager**对象，然后调用了`fragmentGet()`方法。`fragmentGet()`方法中首先调用了`getRequestManagerFragment()`方法获取到**RequestManagerFragment**。
+
+**RequestManagerRetriever的getRequestManagerFragment()方法**
 
 ```java
 /** Pending adds for RequestManagerFragments. */
@@ -1700,23 +1704,468 @@ RequestTracker中定义了一个Set保存所有图片加载的Request，不难�
 
 Glide的缓存机制可以分为两层：内存缓存和磁盘缓存。内存缓存和磁盘缓存的作用都是为了防止重复从网络或其他地方下载图片，区别在于缓存的位置，顾名思义，内存缓存是将图片缓存在应用内存中，磁盘缓存是将图片缓存到手机磁盘中。
 
-### 3.1.内存缓存
+### 3.1.缓存key的生成
 
-弱引用和LruCache，正在使用的图片使用弱引用机制进行缓存，不在使用中的图片使用LruCache来进行缓存。
+Glide的内存缓存和磁盘缓存都是通过一个key来标识的，生成缓存key的代码在Engine的`load()`方法中：
 
-**LruResourceCache** cache
+**Engine的load()方法**
 
-**HashMap<Key, WeakReference<EngineResource<?>>>** activeResources
+```java
+public <T, Z, R> LoadStatus load(Key signature, int width, int height, DataFetcher<T> fetcher,
+                                 DataLoadProvider<T, Z> loadProvider, Transformation<Z> transformation, ResourceTranscoder<Z, R> transcoder,
+                                 Priority priority, boolean isMemoryCacheable, DiskCacheStrategy diskCacheStrategy, ResourceCallback cb) {
+    // ...
+    final String id = fetcher.getId();
+    EngineKey key = keyFactory.buildKey(id, signature, width, height, loadProvider.getCacheDecoder(),
+            loadProvider.getSourceDecoder(), transformation, loadProvider.getEncoder(),
+            transcoder, loadProvider.getSourceEncoder());
+    // ...
+}
+```
+
+首先通过`fetcher.getId()`获取到一个String类型的id，对应加载网络图片时的图片地址，然后调用keyFactory的`buildKey()`方法创建出一个**EngineKey**对象作为缓存key，这里的keyFactory类型为**EngineKeyFactory**，我们来看一下EngineKeyFactorykeyFactory的`buildKey()`方法：
+
+**EngineKeyFactory的buildKey()方法**
+
+```java
+public EngineKey buildKey(String id, Key signature, int width, int height, ResourceDecoder cacheDecoder,
+                          ResourceDecoder sourceDecoder, Transformation transformation, ResourceEncoder encoder,
+                          ResourceTranscoder transcoder, Encoder sourceEncoder) {
+    return new EngineKey(id, signature, width, height, cacheDecoder, sourceDecoder, transformation, encoder,
+            transcoder, sourceEncoder);
+}
+```
+
+这里就是简单地调用EngineKey的构造方法创建出一个EngineKey对象，可以看出构造缓存key的参数非常多，只有所有的参数都相同的情况下才会创建出同一个缓存key，具体地可以查看EngineKey重写的`equals()`方法，这里就不展示了。
+
+### 3.2.内存缓存
+
+Glide默认是开启内存缓存的，如果我们不需要可以通过代码来禁用内存缓存：
+
+```java
+Glide.with(this)
+     .load("url")
+     .skipMemoryCache(true)
+     .into(imageView);
+```
+
+Glide的内存缓存可以分为两部分：**弱引用**和**LruCache**，正在使用的图片使用弱引用机制进行缓存，不在使用中的图片使用LruCache来进行缓存。下面我们就来具体看一下这两种缓存的使用，还是从Engine的`load()`方法入手。
+
+```java
+public <T, Z, R> LoadStatus load(Key signature, int width, int height, DataFetcher<T> fetcher,
+                                 DataLoadProvider<T, Z> loadProvider, Transformation<Z> transformation, ResourceTranscoder<Z, R> transcoder,
+                                 Priority priority, boolean isMemoryCacheable, DiskCacheStrategy diskCacheStrategy, ResourceCallback cb) {
+    // ...
+    final String id = fetcher.getId();
+    // 生成缓存key
+    EngineKey key = keyFactory.buildKey(id, signature, width, height, loadProvider.getCacheDecoder(),
+            loadProvider.getSourceDecoder(), transformation, loadProvider.getEncoder(),
+            transcoder, loadProvider.getSourceEncoder());
+    // 从LruCache中获取缓存
+    EngineResource<?> cached = loadFromCache(key, isMemoryCacheable);
+    if (cached != null) {
+        cb.onResourceReady(cached);
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            logWithTimeAndKey("Loaded resource from cache", startTime, key);
+        }
+        return null;
+    }
+    // 从弱引用中获取缓存
+    EngineResource<?> active = loadFromActiveResources(key, isMemoryCacheable);
+    if (active != null) {
+        cb.onResourceReady(active);
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            logWithTimeAndKey("Loaded resource from active resources", startTime, key);
+        }
+        return null;
+    }
+    // ...
+}
+```
+
+`load()`方法中首先生成了缓存key，然后调用`loadFromCache()`方法从LruCache中获取缓存资源，如果获取到了就直接执行`cb.onResourceReady(cached)`，根据此前的分析，这里的cb就是**GenericRequest**，因此这之后会调用GenericRequest的`onResourceReady()`方法，将缓存图片显示出来。如果从LruCache中没有获取到图片缓存，接下来会调用`loadFromActiveResources()`方法从弱引用中获取图片缓存，如果获取到了缓存同样会调用GenericRequest的`onResourceReady()`方法将缓存图片显示出来，否则就执行正常的图片加载逻辑，即创建**EngineRunnable**执行图片加载任务。下面我们来分别看一下这两种缓存的获取和保存方式。
+
+#### 3.2.1.LruCache缓存
+
+我们来看一下Engine的`loadFromCache()`方法：
+
+```java
+// LruCache
+private final MemoryCache cache;
+// 弱引用
+private final Map<Key, WeakReference<EngineResource<?>>> activeResources;
+
+private EngineResource<?> loadFromCache(Key key, boolean isMemoryCacheable) {
+    if (!isMemoryCacheable) {
+        return null;
+    }
+
+    EngineResource<?> cached = getEngineResourceFromCache(key);
+    if (cached != null) {
+        cached.acquire();
+        activeResources.put(key, new ResourceWeakReference(key, cached, getReferenceQueue()));
+    }
+    return cached;
+}
+
+private EngineResource<?> getEngineResourceFromCache(Key key) {
+    Resource<?> cached = cache.remove(key);
+
+    final EngineResource result;
+    if (cached == null) {
+        result = null;
+    } else if (cached instanceof EngineResource) {
+        result = (EngineResource) cached;
+    } else {
+        result = new EngineResource(cached, true /*isCacheable*/);
+    }
+    return result;
+}
+```
+
+首先通过**isMemoryCacheable**判断是否允许内存缓存，前面也提到了默认情况下是开启内存缓存的，通过调用`skipMemoryCache(true)`可以禁用内存缓存，如果开启了内存缓存就会接着调用`getEngineResourceFromCache()`方法。`getEngineResourceFromCache()`方法内部调用**cache**的`remove()`方法来获取缓存资源，这里的cache类型为**LruResourceCache**，它继承自**LruCache**，内部使用Lru（最近最少使用）算法来管理缓存资源，这里调用`remove()`方法获取缓存的同时也将缓存从LruCache中移除，图片缓存资源最终被包装为一个**EngineResource**对象。回到`loadFromCache()`方法，如果从LruCache中获取到了图片缓存资源，接下来会调用EngineResource的`acquire()`方法，我们来看一下这个方法：
+
+```java
+private int acquired;
+
+void acquire() {
+    if (isRecycled) {
+        throw new IllegalStateException("Cannot acquire a recycled resource");
+    }
+    if (!Looper.getMainLooper().equals(Looper.myLooper())) {
+        throw new IllegalThreadStateException("Must call acquire on the main thread");
+    }
+    ++acquired;
+}
+```
+
+EngineResource内部定义了一个int类型的变量**acquired**，用于记录图片被引用的次数，`acquire()`方法内部会将引用次数加1。这之后调用了**activeResources**的`put()`方法，activeResources的类型为Map，使用弱引用保存缓存图片资源，这里就是将缓存资源添加到弱引用Map中。
+
+缓存的获取基本上就是这样，那么添加是在什么时候呢，我们此前分析过当图片加载成功后会执行EngineJob的`handleResultOnMainThread()`方法，我们来重新看一下这个方法：
+
+```java
+private void handleResultOnMainThread() {
+    if (isCancelled) {
+        resource.recycle();
+        return;
+    } else if (cbs.isEmpty()) {
+        throw new IllegalStateException("Received a resource without any callbacks to notify");
+    }
+    engineResource = engineResourceFactory.build(resource, isCacheable);
+    hasResource = true;
+
+    engineResource.acquire();
+    listener.onEngineJobComplete(key, engineResource);
+
+    for (ResourceCallback cb : cbs) {
+        if (!isInIgnoredCallbacks(cb)) {
+            engineResource.acquire();
+            cb.onResourceReady(engineResource);
+        }
+    }
+    engineResource.release();
+}
+```
+
+我们注意到最后调用了EngineResource的`release()`方法，我们来看一下这个方法：
+
+```java
+void release() {
+    if (acquired <= 0) {
+        throw new IllegalStateException("Cannot release a recycled or not yet acquired resource");
+    }
+    if (!Looper.getMainLooper().equals(Looper.myLooper())) {
+        throw new IllegalThreadStateException("Must call release on the main thread");
+    }
+    if (--acquired == 0) {
+        listener.onResourceReleased(key, this);
+    }
+}
+```
+
+可以看出，`release()`方法和我们之前看到的`acquire()`方法类似，不过`release()`方法是将图片的引用次数acquired减1，当acquired减为0时，说明图片没有被使用，接着会调用listener的`onResourceReleased()`方法，这里的listener类型为Engine，我们来看一下它的`onResourceReleased()`方法：
+
+```java
+@Override
+public void onResourceReleased(Key cacheKey, EngineResource resource) {
+    Util.assertMainThread();
+  	// 将图片资源从activeResources中移除
+    activeResources.remove(cacheKey);
+    if (resource.isCacheable()) {
+      	// 将图片资源添加到LruCache中
+        cache.put(cacheKey, resource);
+    } else {
+        resourceRecycler.recycle(resource);
+    }
+}
+```
+
+可以看出这里首先将图片资源从activeResources中移除，然后添加到了LruCache缓存中，LruCache缓存就是这样添加的。
+
+#### 3.2.2.弱引用缓存
+
+我们来看一下Engine的`loadFromActiveResources()`方法，当从LruCache没有获取到缓存后会调用该方法从弱引用中获取缓存：
+
+```java
+private EngineResource<?> loadFromActiveResources(Key key, boolean isMemoryCacheable) {
+    if (!isMemoryCacheable) {
+        return null;
+    }
+
+    EngineResource<?> active = null;
+    WeakReference<EngineResource<?>> activeRef = activeResources.get(key);
+    if (activeRef != null) {
+        active = activeRef.get();
+        if (active != null) {
+            active.acquire();
+        } else {
+            activeResources.remove(key);
+        }
+    }
+
+    return active;
+}
+```
+
+同样地，首先会判断是否允许内存缓存，如果允许内存缓存就根据缓存key从activeResources中获取图片缓存资源的弱引用，接着调用`get()`方法获取到缓存的图片资源active，如果active为null说明缓存资源对象已经被回收，移除这个弱引用对象；反之则说明缓存资源对象还存在，直接加载缓存资源。
+
+接着我们来看缓存资源的添加，同样是在EngineJob的`handleResultOnMainThread()`方法中，这里再贴一遍代码：
+
+```java
+private void handleResultOnMainThread() {
+    if (isCancelled) {
+        resource.recycle();
+        return;
+    } else if (cbs.isEmpty()) {
+        throw new IllegalStateException("Received a resource without any callbacks to notify");
+    }
+    engineResource = engineResourceFactory.build(resource, isCacheable);
+    hasResource = true;
+
+    engineResource.acquire();
+  	// 关键代码
+    listener.onEngineJobComplete(key, engineResource);
+
+    for (ResourceCallback cb : cbs) {
+        if (!isInIgnoredCallbacks(cb)) {
+            engineResource.acquire();
+            cb.onResourceReady(engineResource);
+        }
+    }
+    engineResource.release();
+}
+```
+
+方法内部调用了listener的`onEngineJobComplete()`方法，这里的listener就是Engine，我们来看一下它的`onEngineJobComplete()`方法：
+
+```java
+@Override
+public void onEngineJobComplete(Key key, EngineResource<?> resource) {
+    Util.assertMainThread();
+    if (resource != null) {
+        resource.setResourceListener(key, this);
+
+        if (resource.isCacheable()) {
+          	// 将图片资源以弱引用方式添加到activeResources中
+            activeResources.put(key, new ResourceWeakReference(key, resource, getReferenceQueue()));
+        }
+    }
+    jobs.remove(key);
+}
+```
+
+很明显可以看到方法内部将图片资源以弱引用方式添加到activeResources中，这就完成了弱引用缓存的添加。
+
+总结一下，Glide的内存缓存分为两部分：LruCache缓存和弱引用缓存，这两种机制是互相协作的，在加载图片时，首先从LruCache中获取缓存，没有获取到就从弱引用中获取缓存，如果都没有就执行正常的图片的加载逻辑。缓存图片资源对象EngineResource内部记录了图片的使用次数，图片加载完成后会将使用次数加1，并添加到弱引用缓存中；当图片使用次数为0时会将缓存从弱引用中移除，添加到LruCache中，而从LruCache中取出的缓存也会被添加到弱引用缓存中。综上所述可以得出一个结论：弱引用保存的是当前正在使用的图片缓存，LruCache保存的是当前没有使用的图片缓存，其实关于Glide内存缓存的设计我起初也很困惑，为什么要设计一个弱引用，直接使用LruCache不就行了？后来我在郭神的文章下看到了[快乐的编码小猪](https://me.csdn.net/hanshengjian)这位兄台的评论，我觉得解释得很有道理，这里引用一下：
+
+Glide设计弱引用缓存的作用：
+
+* 分担LruCache的压力，减少trimToSize的概率。如果正在remove的是张大图，LruCache正好处在临界点，此时remove操作，将延缓LruCache的trimToSize操作。
+* 提高效率。activeResource用的是HashMap，LruCache用的是LinkedHashMap,从访问效率而言，肯定是HashMap高不少，HashMap起一个辅助作用，并不是什么保护图片不被回收。
+
+值得一提的是，目前最新版本的Glide（4.10.0）源码中获取缓存的顺序已经改变了，先从activeResource弱引用缓存中获取，再从LruCache中获取，而且在弱引用对象被回收时，会将图片缓存资源添加到LruCache中。
+
+最后我们通过实际场景验证一下Glide内存缓存的使用，简单地加载一张图片，分别看一下首次加载和有缓存的情况下是怎样的。
+
+* 首次加载图片
+
+LruCache缓存：**cache**无数据
+
+弱引用：**activeResources**的size=0
+
+* 图片首次加载完成后
+
+LruCache缓存：**cache**无数据
+
+弱引用：**activeResources**的size=1，缓存资源EngineResource的**acquire**=1
+
+* 第二次加载图片（有缓存的情况）
+
+首先调用EngineResource的`release()`方法，**acquire**减1变为0，缓存被添加到LruCache中，此时状态如下：
+
+LruCache缓存：**cache**有一条数据
+
+弱引用：**activeResources**的size=0，缓存资源EngineResource的**acquire**=0
+
+接着从LruCache中获取到缓存图片，LruCache缓存中的缓存对象被添加到了**activeResources**中，最终状态和上一个情况相同。
+
+下面我简单解释一下有缓存情况的图片加载流程是怎样的，我们首先来看GenericRequestBuilder的`into(Y target)`方法：
+
+```java
+public <Y extends Target<TranscodeType>> Y into(Y target) {
+    // ...
+    Request previous = target.getRequest();
+
+    if (previous != null) {
+        previous.clear();
+        requestTracker.removeRequest(previous);
+        previous.recycle();
+    }
+
+    Request request = buildRequest(target);
+    target.setRequest(request);
+    lifecycle.addListener(target);
+    requestTracker.runRequest(request);
+
+    return target;
+}
+```
+
+方法内部首先会调用target的`getRequest()`方法，这里的target类型为GlideDrawableImageViewTarget，`getRequest()`方法定义在它的父类**ViewTarget**中，我们来看一下ViewTarget的`getRequest()`方法：
+
+```java
+@Override
+public Request getRequest() {
+    Object tag = getTag();
+    Request request = null;
+    if (tag != null) {
+        if (tag instanceof Request) {
+            request = (Request) tag;
+        } else {
+            throw new IllegalArgumentException("You must not call setTag() on a view Glide is targeting");
+        }
+    }
+    return request;
+}
+```
+
+可以看出方法内部调用了`getTag()`方法，将返回对象转为Request对象并返回，我们接着看`getTag()`方法：
+
+```java
+private Object getTag() {
+    if (tagId == null) {
+        return view.getTag();
+    } else {
+        return view.getTag(tagId);
+    }
+}
+```
+
+`getTag()`方法内部调用了view的`getTag()`方法，这里的view其实就是`into()`方法传进来的ImageView，因此一开始`target.getRequest()`获取到Request对象其实就是ImageView中设置的tag，对应mTag变量。那么ImageView的tag是什么时候被设置的呢，同样是在`into(Y target)`方法中，在创建出Request对象后调用了target的`setRequest()`方法，方法内部最终就会调用到ImageView的`setTag()`方法将Request对象赋值给Image的mTag。因此首次加载图片时`target.getRequest()`获取到Request对象为null，第二次加载图片时通过`target.getRequest()`获取到的就是上一次加载时创建出的Request对象（实际类型为GenericRequest），接下来会调用GenericRequest的`clear()`方法，我们来看一下这个方法：
+
+```java
+@Override
+public void clear() {
+    // ...
+    if (resource != null) {
+        releaseResource(resource);
+    }
+    // ...
+}
+
+private void releaseResource(Resource resource) {
+    engine.release(resource);
+    this.resource = null;
+}
+
+```
+
+`clear()`方法内部判断了resource是否为null，这里的resource是在第一次加载图片成功后调用`onResourceReady()`方法时赋值的，因此这里的resource不为null，类型为EngineResource，接下来会调用`releaseResource()`方法，接着又调用了Engine的`release()`方法。
+
+```java
+public void release(Resource resource) {
+    Util.assertMainThread();
+    if (resource instanceof EngineResource) {
+        ((EngineResource) resource).release();
+    } else {
+        throw new IllegalArgumentException("Cannot release anything but an EngineResource");
+    }
+}
+```
+
+可以看到这里调用了EngineResource的`release()`方法，根据此前的分析，这里就会把EngineResource中定义的acquire减1，此时acquire变为了0，因此会将图片资源从activeResources中移除并且添加到LruCache中，此次加载图片时就会从LruCache中获取缓存。
+
+### 3.3.磁盘缓存
+
+和内存缓存一样，Glide同样是默认开启磁盘缓存的，可以通过以下代码来禁用磁盘缓存：
+
+```java
+Glide.with(this)
+        .load("url")
+        .diskCacheStrategy(DiskCacheStrategy.NONE)
+        .into(imageView);
+```
+
+`diskCacheStrategy()`方法接收一个参数，表示磁盘缓存策略，Glide提供了四种磁盘缓存策略
+
+* **DiskCacheStrategy.NONE**：禁用磁盘缓存
+* **DiskCacheStrategy.SOURCE**：只缓存原始图片
+* **DiskCacheStrategy.RESULT**：只缓存转换后的图片
+* **DiskCacheStrategy.ALL**：既缓存原始图片，也缓存转换后的图片
+
+Glide默认的磁盘缓存策略是**DiskCacheStrategy.RESULT**，只缓存转换后的图片，这里的"转换后"是什么意思呢？我们在前面分析图片加载流程时其实也提到过，Glide在加载图片时并不会直接加载原图片，而是进行一系列的处理，比如根据ImageView的尺寸确定图片加载尺寸等等。
+
+Glide获取磁盘缓存是在哪里呢，我们来看EngineRunnable的`run()`方法：
+
+```java
+@Override
+public void run() {
+    // ...
+    resource = decode();
+    // ...
+}
+
+private Resource<?> decode() throws Exception {
+    if (isDecodingFromCache()) {
+        return decodeFromCache();
+    } else {
+        return decodeFromSource();
+    }
+}
+```
+
+`run()`方法中调用了`decode()`方法，方法内部首先通过`isDecodingFromCache()`方法判断是否从缓存中读取图片，如果是就调用`decodeFromCache()`方法，反之则调用`decodeFromSource()`方法从网络或者其他地方获取原图片，默认情况下`isDecodingFromCache()`方法会返回true，因此会优先从缓存中读取图片，我们接着来看`decodeFromCache()`方法。
+
+```java
+private Resource<?> decodeFromCache() throws Exception {
+    Resource<?> result = null;
+    // ...
+    result = decodeJob.decodeResultFromCache();
+    // ...
+    if (result == null) {
+        result = decodeJob.decodeSourceFromCache();
+    }
+    return result;
+}
+```
 
 
 
-### 3.2.磁盘缓存
+```java
+public Resource<Z> decodeResultFromCache() throws Exception {
+    // ...
+    Resource<T> transformed = loadFromCache(resultKey);
+    // ...
+    Resource<Z> result = transcode(transformed);
+    // ...
+    return result;
+}
 
-
-
-
-
-
-
-
+public Resource<Z> decodeSourceFromCache() throws Exception {
+    // ...
+    Resource<T> decoded = loadFromCache(resultKey.getOriginalKey());
+    // ...
+    return transformEncodeAndTranscode(decoded);
+}
+```
 

@@ -843,7 +843,17 @@ Android 9.0限制了明文流量的网络请求（HTTP），非加密的流量�
 
 1）将网络请求统一改为“https”
 
-2）在资源文件res下新建xml目录，新建文件**network_security_config.xml**
+2）在AndroidManifest.xml中配置
+
+```xml
+<application
+    ...
+    android:usesCleartextTraffic="true"
+    ...
+>
+```
+
+3）在资源文件res下新建xml目录，新建文件**network_security_config.xml**
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
